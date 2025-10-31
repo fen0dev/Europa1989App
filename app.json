@@ -3,14 +3,15 @@
     "name": "manuals-app",
     "slug": "manuals-app",
     "version": "1.0.0",
+    "scheme": "europa",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0b0f14"
     },
     "ios": {
       "supportsTablet": true
@@ -18,13 +19,19 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0b0f14"
       },
+      "intentFilters": [
+        { "action": "VIEW", "category": ["BROWSABLE","DEFAULT"], "data": [{ "scheme": "europa" }] }
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }
