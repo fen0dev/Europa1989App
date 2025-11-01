@@ -152,5 +152,3 @@ Upon completion of development and receipt of full payment:
 Disclaimer:
 - The software is provided “AS IS” without warranties of any kind, express or implied, including but not limited to merchantability, fitness for a particular purpose, and non‑infringement.
 - In no event shall the Author/Developer be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from or in connection with the software or its use.
-
-If you need a separate LICENSE file mirroring these terms, copy this section into a new `LICENSE` file at the repository root.
