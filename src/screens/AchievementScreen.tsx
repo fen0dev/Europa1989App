@@ -226,6 +226,101 @@ const styles = StyleSheet.create({
     fontWeight: '600', 
     fontSize: 13,
   },
+  completionPlaceholder: {
+    marginTop: 0,
+    alignItems: 'flex-start',
+  },
+  placeholderStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  placeholderBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderCopy: {
+    gap: 4,
+  },
+  placeholderTitle: {
+    color: colors.fg,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  placeholderSubtitle: {
+    color: 'rgba(232,238,247,0.7)',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  completionRow: {
+    marginTop: 0,
+    padding: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  avatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 120,
+  },
+  stackItem: {
+    width: 48,
+    height: 48,
+  },
+  stackBubble: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2,
+  },
+  stackAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+  },
+  stackAvatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  stackExtra: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stackExtraText: {
+    color: colors.fg,
+    fontWeight: '700',
+  },
+  completionCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  completionHeadline: {
+    color: colors.fg,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  completionHint: {
+    color: 'rgba(232,238,247,0.7)',
+    fontSize: 12,
+    marginTop: 2,
+  },
 });
 
 function AnimatedAchievementCard({ item, index, navigation }: {
