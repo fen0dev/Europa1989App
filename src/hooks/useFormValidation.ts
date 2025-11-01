@@ -96,6 +96,13 @@ export const validators = {
     },
     message: message || `Must be at least ${min} characters`,
   }),
+  maxLength: (max: number, message?: string): ValidationRule => ({
+    validator: (value) => {
+      if (!value.trim()) return true;
+      return value.length <= max;
+    },
+    message: message || `Must be at most ${max} characters`,
+  }),
   phone: (message = 'Invalid phone number'): ValidationRule => ({
     validator: (value) => {
       if (!value.trim()) return true;

@@ -27,6 +27,15 @@ export type Article = {
     order_index: number;
 };
 
+export type ManualCompletion = {
+    manual_id: string;
+    user_id: string;
+    ack_version: number;
+    completed_at: string;
+    display_name?: string | null;
+    avatar_url?: string | null;
+};
+
 export async function getManuals(): Promise<Manual[]> {
     const { data, error } = await supabase
         .from('manuals')
@@ -66,6 +75,35 @@ export async function getMyManualAcks(): Promise<Record<string, number>> {
     (data ?? []).forEach((r: any) => {
       map[r.manual_id] = Math.max(map[r.manual_id] ?? 0, r.ack_version ?? 0);
     });
+    return map;
+}
+
+export async function getManualCompletions(): Promise<Record<string, ManualCompletion[]>> {
+    const { data, error } = await supabase
+        .from('v_manual_ack_profiles')
+        .select('manual_id,user_id,ack_version,completed_at,display_name,avatar_url')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const map: Record<string, ManualCompletion[]> = {};
+    (data ?? []).forEach((row: any) => {
+        const item: ManualCompletion = {
+            manual_id: row.manual_id,
+            user_id: row.user_id,
+            ack_version: row.ack_version,
+            completed_at: row.completed_at,
+            display_name: row.display_name,
+            avatar_url: row.avatar_url,
+        };
+
+        if (!map[item.manual_id]) {
+            map[item.manual_id] = [];
+        }
+
+        map[item.manual_id].push(item);
+    });
+
     return map;
 }
 

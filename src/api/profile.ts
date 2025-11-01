@@ -7,7 +7,10 @@ export type UserProfile = {
     email: string;
     full_name?: string;
     phone?: string | null;
-    avatar_url?: string | null; 
+    avatar_url?: string | null;
+    nickname?: string | null;
+    accent_color?: string | null;
+    status_message?: string | null;
     updated_at?: string;
 };
 
@@ -28,23 +31,29 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 
     // if profile doesn't exist or is not found, we create it
     if (!data) {
+        const { full_name, phone, avatar_url, nickname, accent_color, status_message } = user?.user_metadata ?? {};
         return {
             id: user.id,
             email: user.email || '',
-            full_name: user.user_metadata?.full_name || null,
-            phone: user.user_metadata?.phone || null,
-            avatar_url: user.user_metadata?.avatar_url || null,
+            full_name: full_name ?? null,
+            phone: phone ?? null,
+            avatar_url: avatar_url ?? null,
+            nickname: nickname ?? null,
+            accent_color: accent_color ?? '#4FFFBF',
+            status_message: status_message ?? null,
         };
     }
 
     return data as UserProfile;
 }
 
+type ProfileUpdates = Partial<Pick<UserProfile, 'full_name' | 'phone' | 'nickname' | 'accent_color' | 'status_message'>>;
+
 /**
  * Update user profile 
 */
 export async function updateUserProfile(
-    updates: Partial<Pick<UserProfile, 'full_name' | 'phone' >>
+    updates: ProfileUpdates
 ): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not found or not authenticated');
@@ -112,8 +121,11 @@ export async function uploadProfileImage(): Promise<string> {
     const { error: updateError } = await supabase.from('profiles').upsert({
         id: user.id,
         email: user.email,
-        full_name: existingProfile?.full_name || null,
-        phone: existingProfile?.phone || null,
+        full_name: existingProfile.full_name ?? null,
+        phone: existingProfile.phone ?? null,
+        nickname: existingProfile.nickname ?? null,
+        accent_color: existingProfile.accent_color ?? '#4FFFBF',
+        status_message: existingProfile.status_message ?? null,
         avatar_url: publicUrl,
         updated_at: new Date().toISOString(),
     });
