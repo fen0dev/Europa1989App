@@ -148,7 +148,7 @@ export default function ProfileScreen() {
   const { mutate: handleLogout, isPending: isLoggingOut } = useMutation({
     mutationFn: logout,
     onSuccess: () => {
-      toast.showToast('Logged out successfully', 'info');
+      queryClient.clear();
     },
     onError: (error: any) => {
       toast.showToast(error.message || 'Unable to logout. Please try again.', 'error');

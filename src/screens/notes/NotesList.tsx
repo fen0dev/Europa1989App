@@ -127,18 +127,20 @@ export function NotesList({ manualId, sectionId, articleId, onNotePress }: NoteL
                     </Pressable>
                 </View>
             ) : (
-                <FlatList
-                    data={notes}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                        <NoteCard
-                            note={item}
-                            onPress={() => onNotePress?.(item)}
-                        />
-                    )}
-                    contentContainerStyle={styles.listContent}
-                    showsHorizontalScrollIndicator={false}
-                />
+                <View style={styles.notesContainer}>
+                  <FlatList
+                      data={notes}
+                      keyExtractor={(item) => item.id}
+                      renderItem={({ item }) => (
+                          <NoteCard
+                              note={item}
+                              onPress={() => onNotePress?.(item)}
+                          />
+                      )}
+                      contentContainerStyle={styles.listContent}
+                      showsHorizontalScrollIndicator={false}
+                  />
+                </View>
             )}
 
             <AddNoteModal
@@ -367,6 +369,9 @@ function AddNoteModal({
       },
       listContent: {
         padding: spacing.md,
+      },
+      notesContainer: {
+        marginTop: spacing.md,
       },
       emptyState: {
         flex: 1,

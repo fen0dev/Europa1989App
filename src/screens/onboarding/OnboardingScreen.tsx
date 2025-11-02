@@ -14,7 +14,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing, shadow } from '../../theme/tokens';
-import { hasCompletedOnboarding, setOnboardingCompleted } from '../../hooks/onboarding/onboardingStorage';
+import { setOnboardingCompleted } from '../../hooks/onboarding/onboardingStorage';
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -34,21 +34,21 @@ const ONBOARDING_DATA: OnboardingCard[] = [
         icon: 'book-outline',
         title: 'Work Manuals',
         description: 'Access all technical, standard, and safety procedures in one place.',
-        gradient: ['rgba(79, 140, 255, 0.2)', 'rgba(79, 140, 255, 0.05)'],
+        gradient: ['rgba(41, 241, 188, 0.4)', 'rgba(79, 255, 149, 0.17)'],
     },
     {
         id: '2',
         icon: 'checkmark-circle-outline',
-        title: 'Quick Quiz-Check',
+        title: 'Quick Check',
         description: 'Complete quick quizzes to test your understanding and complete manuals.',
-        gradient: ['rgba(29, 33, 29, 0.2)', 'rgba(76, 175, 80, 0.05)'],
+        gradient: ['rgba(41, 241, 188, 0.4)', 'rgba(79, 255, 149, 0.17)'],
     },
     {
         id: '3',
         icon: 'trophy-outline',
-        title: 'Track Your Progress',
+        title: 'Track Progress',
         description: 'View your achievements and keep track of completed manuals.',
-        gradient: ['rgba(255, 152, 0, 0.2)', 'rgba(255, 152, 0, 0.05)'],
+        gradient: ['rgba(41, 241, 188, 0.4)', 'rgba(79, 255, 149, 0.17)'],
     },
 ];
 
@@ -138,7 +138,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
                         <View style={styles.iconContainer}>
                             <View style={styles.iconCircle}>
-                                <Ionicons name={item.icon} size={64} color={colors.primary} />
+                                <Ionicons name={item.icon} size={64} color='#fff' />
                             </View>
                         </View>
 
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     card: {
       width: SCREEN_WIDTH - CARD_PADDING * 1.25,
       aspectRatio: 0.85,
-      borderRadius: radius.xl,
+      borderRadius: radius.xl + 15,
       overflow: 'hidden',
     },
     cardBlur: {
@@ -322,11 +322,11 @@ const styles = StyleSheet.create({
       width: 140,
       height: 140,
       borderRadius: 70,
-      backgroundColor: 'rgba(79, 140, 255, 0.15)',
+      backgroundColor: 'rgba(163, 195, 255, 0.15)',
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: 2,
-      borderColor: 'rgba(79, 140, 255, 0.3)',
+      borderColor: 'rgba(79, 255, 214, 0.3)',
     },
     textContainer: {
       alignItems: 'center',
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     paginationDot: {
       height: 8,
       borderRadius: 4,
-      backgroundColor: colors.primary,
+      backgroundColor: '#fff',
     },
     footer: {
       paddingHorizontal: spacing.xl,
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     },
     nextButton: {
       flex: 1,
-      borderRadius: radius.lg,
+      borderRadius: 35,
       overflow: 'hidden',
       ...Platform.select({
         ios: {

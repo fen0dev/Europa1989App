@@ -34,6 +34,7 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
       // when user logs in check if they have seen onbaording
       if (s) {
         hasCompletedOnboarding().then(setHasSeenOnboarding);

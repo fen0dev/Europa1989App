@@ -159,19 +159,37 @@ export default function ManualsScreen({ navigation }: Props) {
             const notesStats = notesStatsMap[item.id];
 
             return (
-              <AnimatedCard
-                key={item.id}
-                index={index}
-                item={item}
-                completed={completed}
-                completions={completionsMap[item.id] ?? []}
-                notesStats={notesStats}
-                onPress={() => {
-                  requestAnimationFrame(() =>
-                    navigation.push('ManualDetail', { manualId: item.id, title: item.title })
-                  );
-                }}
-              />
+              <React.Fragment key={item.id}>
+                <AnimatedCard
+                  index={index}
+                  item={item}
+                  completed={completed}
+                  completions={completionsMap[item.id] ?? []}
+                  notesStats={undefined}
+                  onPress={() => {
+                    requestAnimationFrame(() =>
+                      navigation.push('ManualDetail', { manualId: item.id, title: item.title })
+                    );
+                  }}
+                />
+                {/* Notes section fuori dalla card */}
+                {notesStats && notesStats.total > 0 && (
+                  <View style={styles.notesOutsideSection}>
+                    <View style={styles.notesOutsideBadge}>
+                      <Ionicons name="document-text-outline" size={14} color="#4f8cff" />
+                      <Text style={styles.notesOutsideText}>
+                        {notesStats.total} {notesStats.total === 1 ? 'note' : 'notes'} from colleagues
+                      </Text>
+                      {notesStats.helpful_count > 0 && (
+                        <View style={styles.helpfulIndicator}>
+                          <Ionicons name="heart" size={10} color="#FF6B6B" />
+                          <Text style={styles.helpfulCount}>{notesStats.helpful_count}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </React.Fragment>
             );
           })
         )}
@@ -254,24 +272,6 @@ function AnimatedCard({
           <View style={styles.completionSection}>
             <CompletionAvatarRow completions={completions} />
           </View>
-
-          {/* Badge Notes se presenti */}
-          {notesStats && notesStats.total > 0 && (
-            <View style={styles.notesBadgeSection}>
-              <View style={styles.notesBadge}>
-                <Ionicons name="document-text-outline" size={14} color="#4f8cff" />
-                <Text style={styles.notesBadgeText}>
-                  {notesStats.total} {notesStats.total === 1 ? 'note' : 'notes'} from colleagues
-                </Text>
-                {notesStats.helpful_count > 0 && (
-                  <View style={styles.helpfulIndicator}>
-                    <Ionicons name="heart" size={10} color="#FF6B6B" />
-                    <Text style={styles.helpfulCount}>{notesStats.helpful_count}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
 
           {/* Meta info (title, description, pills) sotto i completamenti */}
           <View style={styles.meta}>
@@ -661,5 +661,29 @@ const styles = StyleSheet.create({
     color: 'rgba(232,238,247,0.7)',
     fontSize: 12,
     marginTop: 2,
+  },
+  
+  // Nuovi stili per le note fuori dalla card
+  notesOutsideSection: {
+    marginTop: -14,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.xs,
+  },
+  notesOutsideBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(79, 140, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(79, 140, 255, 0.25)',
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  notesOutsideText: {
+    color: '#4f8cff',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
