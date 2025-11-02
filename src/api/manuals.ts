@@ -117,6 +117,18 @@ export async function getSections(manualId: string): Promise<Section[]> {
     return (data ?? []) as Section[];
 }
 
+export async function getSection(sectionId: string): Promise<Section & { manual_id: string}> {
+    const { data, error } = await supabase
+        .from('sections')
+        .select('id,manual_id,title,order_index')
+        .eq('id', sectionId)
+        .single();
+
+    if (error) throw error;
+
+    return data as Section & { manual_id: string };
+}
+
 export async function getArticles(sectionId: string): Promise<Article[]> {
     const { data, error } = await supabase
         .from('articles')

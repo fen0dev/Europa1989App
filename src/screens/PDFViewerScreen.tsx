@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import { colors, spacing, radius } from '../theme/tokens';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { getManual, getManualAck } from '../api/manuals';
-import { getManualQuestions, submitManualAnswer, rpcAckManual } from '../api/quiz';
+import { getManualQuestions, submitAllAnswers, rpcAckManual } from '../api/quiz';
 import { Ionicons } from '@expo/vector-icons';
 import { useToast } from './notification/toast/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -96,13 +96,7 @@ export default function PDFViewerScreen({ route, navigation }: Props) {
 
         setSubmitting(true);
         try {
-            for (const q of questions) {
-                const c = answers[q.id];
-                if (c === 'A' || c === 'B') {
-                    await submitManualAnswer(q.id, c);
-                }
-            }
-            
+            await submitAllAnswers(answers);
             await doAck();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             toast.showToast('Manual completed successfully! 🎉', 'success');

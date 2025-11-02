@@ -20,24 +20,38 @@ export async function getManualQuestions(manualId: string): Promise<ManualQuesti
     
       return (data ?? []) as ManualQuestion[];
 }
-  
-export async function submitManualAnswer(questionId: string, choice: 'A' | 'B'): Promise<void> {
+
+export async function submitAllAnswers(answers: Record<string, 'A' | 'B'>): Promise<void> {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) throw new Error('Unauthorized user');
 
-    const { error } = await supabase
-        .from('manual_answers')
-        .upsert(
-            {
-                user_id: userId,
-                question_id: questionId,
-                choice: choice,
-            },
-            { onConflict: 'user_id,question_id' }
-        );
-    
-    if (error) throw error;
+    const submissions = Object.entries(answers).map(([questionId, choice]) =>
+        supabase
+            .from('manual_answers')
+            .upsert(
+                {
+                    user_id: userId,
+                    question_id: questionId,
+                    choice: choice,
+                },
+                {  onConflict: 'user_id,question_id' }
+            )
+            .then(({ error }) => {
+                if (error) {
+                    return { questionId, error };
+                }
+                return { questionId, error: null };
+            })
+    );
+
+    const results = await Promise.all(submissions);
+    const failures = results.filter((r) => r.error !== null);
+
+    if (failures.length > 0) {
+        const errorMessages = failures.map((f) => `${f.questionId}: ${f.error?.message || 'Unknown error'}`).join(', ');
+        throw new Error(`Failed to save ${failures.length} answer(s): ${errorMessages}`);
+    }
 }
   
 export async function rpcAckManual(manualId: string): Promise<void> {

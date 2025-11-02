@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, useWindowDimensions, ScrollView } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { getArticle, trackArticleRead } from '../api/manuals';
+import { getArticle, trackArticleRead, getSection } from '../api/manuals';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { WebView } from 'react-native-webview';
 import { colors, spacing } from '../theme/tokens';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import ErrorView from './error/ErrorView';
+import { NotesList } from './notes/NotesList';
 import { SkeletonLoader } from './loader/SkeletonLoader';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Article'>;
@@ -21,16 +21,23 @@ export default function ArticleScreen({ route }: Props) {
   const headerHeight = useHeaderHeight();
   const [webViewReady, setWebViewReady] = useState(false);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data: article, isLoading, error, refetch } = useQuery({
     queryKey: ['article', articleId],
     queryFn: () => getArticle(articleId),
   });
 
+  // Ottieni la sezione per ricavare manualId
+  const { data: section } = useQuery({
+    queryKey: ['section', article?.section_id],
+    queryFn: () => getSection(article!.section_id),
+    enabled: !!article?.section_id,
+  });
+
   useEffect(() => {
-    if (data?.id) {
-      trackArticleRead(data.id).catch(() => {});
+    if (article?.id) {
+      trackArticleRead(article.id).catch(() => {});
     }
-  }, [data?.id]);
+  }, [article?.id]);
 
   if (isLoading) {
     return (
@@ -61,7 +68,7 @@ export default function ArticleScreen({ route }: Props) {
     );
   }
 
-  if (!data) {
+  if (!article) {
     return (
       <ErrorView
         title="Article Not Found"
@@ -72,7 +79,9 @@ export default function ArticleScreen({ route }: Props) {
     );
   }
 
-  if (data.content_html) {
+  const manualId = section?.manual_id;
+
+  if (article.content_html) {
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -106,7 +115,7 @@ export default function ArticleScreen({ route }: Props) {
           </style>
         </head>
         <body>
-          ${data.content_html}
+          ${article.content_html}
         </body>
       </html>
     `;
@@ -127,6 +136,16 @@ export default function ArticleScreen({ route }: Props) {
           onError={() => setWebViewReady(true)}
           showsVerticalScrollIndicator={true}
         />
+        {/* Sezione Notes sotto il WebView */}
+        {manualId && (
+          <View style={styles.notesSection}>
+            <NotesList 
+              manualId={manualId}
+              sectionId={article.section_id}
+              articleId={article.id}
+            />
+          </View>
+        )}
       </View>
     );
   }
@@ -136,8 +155,18 @@ export default function ArticleScreen({ route }: Props) {
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
     >
-      <Text style={styles.title}>{data.title}</Text>
-      <Text style={styles.text}>{data.content_text ?? 'No content available.'}</Text>
+      <Text style={styles.title}>{article.title}</Text>
+      <Text style={styles.text}>{article.content_text ?? 'No content available.'}</Text>
+      {/* Sezione Notes */}
+      {manualId && (
+        <View style={styles.notesSection}>
+          <NotesList 
+            manualId={manualId}
+            sectionId={article.section_id}
+            articleId={article.id}
+          />
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -165,9 +194,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'rgba(232,238,247,0.9)',
     lineHeight: 24,
+    marginBottom: spacing.lg,
   },
   webView: {
     backgroundColor: colors.bg,
+    flex: 1,
   },
   webViewLoading: {
     position: 'absolute',
@@ -184,5 +215,10 @@ const styles = StyleSheet.create({
     color: 'rgba(232,238,247,0.7)',
     marginTop: spacing.md,
     fontSize: 15,
+  },
+  notesSection: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: spacing.lg,
   },
 });

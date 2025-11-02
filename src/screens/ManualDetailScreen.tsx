@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Pressable, Modal, Animated, ScrollView } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSections, getManual, getManualAck, type Section } from '../api/manuals';
-import { getManualQuestions, submitManualAnswer, rpcAckManual } from '../api/quiz';
+import { getManualQuestions, submitAllAnswers, rpcAckManual } from '../api/quiz';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, radius, spacing } from '../theme/tokens';
@@ -14,6 +14,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useToast } from '../screens/notification/toast/Toast';
 import ErrorView from './error/ErrorView';
 import EmptyState from './error/EmptyState';
+import { NotesList } from './notes/NotesList';
 import { SkeletonLoader } from './loader/SkeletonLoader';
 import * as Haptics from 'expo-haptics';
 
@@ -149,13 +150,7 @@ export default function ManualDetailScreen({ route, navigation }: Props) {
 
     setSubmitting(true);
     try {
-      for (const q of questions) {
-        const c = answers[q.id];
-        if (c === 'A' || c === 'B') {
-          await submitManualAnswer(q.id, c);
-        }
-      }
-      
+      await submitAllAnswers(answers);
       await doAck();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       toast.showToast('Manual completed successfully! 🎉', 'success');
@@ -218,7 +213,20 @@ export default function ManualDetailScreen({ route, navigation }: Props) {
         contentContainerStyle={styles.list}
         data={(sections ?? []) as Section[]}
         keyExtractor={(s) => s.id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={
+          <>
+            {renderHeader()}
+            {/* Sezione Notes */}
+            <View style={styles.notesSection}>
+              <NotesList 
+                manualId={manualId}
+                onNotePress={(note) => {
+                  // Opzionale: scroll a una nota specifica o mostra dettagli
+                }}
+              />
+            </View>
+          </>
+        }
         renderItem={({ item, index }) => (
           <AnimatedSectionRow
             item={item}
@@ -383,6 +391,10 @@ const styles = StyleSheet.create({
   },
   rowTitle: { color: colors.fg, fontSize: 16, flex: 1 },
   emptyBox: { alignItems: 'center', gap: 12, paddingVertical: spacing.xl * 2 },
+  notesSection: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
 });
 
 const m = {

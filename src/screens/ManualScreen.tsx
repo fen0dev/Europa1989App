@@ -4,14 +4,14 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   StyleSheet,
   RefreshControl,
   Image,
   Animated,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import { getManuals, type Manual, getMyManualAcks, getManualCompletions, type ManualCompletion, getManual } from '../api/manuals';
+import { useQuery, useQueries } from '@tanstack/react-query';
+import { getManuals, type Manual, getMyManualAcks, getManualCompletions, type ManualCompletion } from '../api/manuals';
+import { getManualNotesStats } from '../api/notes';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, radius, spacing, shadow } from '../theme/tokens';
@@ -32,7 +32,7 @@ export default function ManualsScreen({ navigation }: Props) {
 
   const manualsQ = useQuery({ queryKey: ['manuals'], queryFn: getManuals, staleTime: 30_000 });
   const acksQ = useQuery({ queryKey: ['my-acks'], queryFn: () => getMyManualAcks(), staleTime: 30_000 });
-  const completionsQ = useQuery({ queryKey: ['manual-completions'], queryFn: () => getManualCompletions(), staleTime: 30_000, });
+  const completionsQ = useQuery({ queryKey: ['manual-completions'], queryFn: () => getManualCompletions(), staleTime: 30_000 });
 
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -45,6 +45,33 @@ export default function ManualsScreen({ navigation }: Props) {
       }).start();
     }
   }, [manualsQ.isLoading, manualsQ.data]);
+
+  // Query per ottenere le stats delle note per ogni manuale visibile
+  const data = (manualsQ.data ?? []) as Manual[];
+  const acks = acksQ.data ?? {};
+  const visible = data.filter(m => (acks[m.id] ?? 0) < (m.manual_version ?? 1));
+
+  const notesStatsQueries = useQueries({
+    queries: visible.map((manual) => ({
+      queryKey: ['manual-notes-stats', manual.id],
+      queryFn: () => getManualNotesStats(manual.id),
+      staleTime: 30_000,
+    })),
+  });
+
+  // Crea una mappa delle stats delle note per manualId
+  const notesStatsMap = React.useMemo(() => {
+    const map: Record<string, { total: number; helpful_count: number }> = {};
+    notesStatsQueries.forEach((query, index) => {
+      if (query.data && visible[index]) {
+        map[visible[index].id] = {
+          total: query.data.total,
+          helpful_count: query.data.helpful_count,
+        };
+      }
+    });
+    return map;
+  }, [notesStatsQueries, visible]);
 
   if (manualsQ.isLoading || acksQ.isLoading || completionsQ.isLoading) {
     return (
@@ -88,10 +115,6 @@ export default function ManualsScreen({ navigation }: Props) {
   const completionsError = completionsQ.error;
   const completionsMap = completionsError ? {} : (completionsQ.data ?? {});
 
-  const data = (manualsQ.data ?? []) as Manual[];
-  const acks = acksQ.data ?? {};
-  const visible = data.filter(m => (acks[m.id] ?? 0) < (m.manual_version ?? 1));
-
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       <ScrollView
@@ -104,6 +127,7 @@ export default function ManualsScreen({ navigation }: Props) {
             onRefresh={() => {
               manualsQ.refetch();
               acksQ.refetch();
+              notesStatsQueries.forEach(q => q.refetch());
             }}
           />
         }
@@ -132,6 +156,7 @@ export default function ManualsScreen({ navigation }: Props) {
             const targetVersion = item.manual_version ?? 1;
             const ackVersion = acks[item.id] ?? 0;
             const completed = ackVersion >= targetVersion;
+            const notesStats = notesStatsMap[item.id];
 
             return (
               <AnimatedCard
@@ -140,6 +165,7 @@ export default function ManualsScreen({ navigation }: Props) {
                 item={item}
                 completed={completed}
                 completions={completionsMap[item.id] ?? []}
+                notesStats={notesStats}
                 onPress={() => {
                   requestAnimationFrame(() =>
                     navigation.push('ManualDetail', { manualId: item.id, title: item.title })
@@ -154,11 +180,19 @@ export default function ManualsScreen({ navigation }: Props) {
   );
 }
 
-function AnimatedCard({ index, item, completed, completions, onPress}: {
+function AnimatedCard({ 
+  index, 
+  item, 
+  completed, 
+  completions, 
+  notesStats,
+  onPress
+}: {
   index: number;
   item: Manual;
   completed: boolean;
   completions: ManualCompletion[];
+  notesStats?: { total: number; helpful_count: number };
   onPress: () => void;
 }) {
   const scaleAnim = React.useRef(new Animated.Value(0.95)).current;
@@ -220,6 +254,24 @@ function AnimatedCard({ index, item, completed, completions, onPress}: {
           <View style={styles.completionSection}>
             <CompletionAvatarRow completions={completions} />
           </View>
+
+          {/* Badge Notes se presenti */}
+          {notesStats && notesStats.total > 0 && (
+            <View style={styles.notesBadgeSection}>
+              <View style={styles.notesBadge}>
+                <Ionicons name="document-text-outline" size={14} color="#4f8cff" />
+                <Text style={styles.notesBadgeText}>
+                  {notesStats.total} {notesStats.total === 1 ? 'note' : 'notes'} from colleagues
+                </Text>
+                {notesStats.helpful_count > 0 && (
+                  <View style={styles.helpfulIndicator}>
+                    <Ionicons name="heart" size={10} color="#FF6B6B" />
+                    <Text style={styles.helpfulCount}>{notesStats.helpful_count}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Meta info (title, description, pills) sotto i completamenti */}
           <View style={styles.meta}>
@@ -389,6 +441,43 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderColor: BORDER,
+  },
+  notesBadgeSection: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  notesBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(79, 140, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(79, 140, 255, 0.25)',
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  notesBadgeText: {
+    color: '#4f8cff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  helpfulIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: spacing.xs,
+    paddingLeft: spacing.xs,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(79, 140, 255, 0.25)',
+  },
+  helpfulCount: {
+    color: '#FF6B6B',
+    fontSize: 11,
+    fontWeight: '700',
   },
   meta: { flex: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 6 },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
