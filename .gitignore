@@ -40,4 +40,4 @@ yarn-error.*
 /android
 
 # supabase SQL EDITOR file
-#supabase.sql
+supabase.sql
