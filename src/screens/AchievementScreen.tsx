@@ -22,6 +22,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import ErrorView from './error/ErrorView';
 import EmptyState from './error/EmptyState';
 import { ManualCardSkeleton } from './loader/SkeletonLoader';
+import NotificationButton from '../components/NotificationButton';
 
 function formatWhen(d?: string | null) {
   if (!d) return 'Completed';
@@ -63,16 +64,13 @@ export default function AchievementScreen() {
         renderItem={() => <ManualCardSkeleton />}
         ListHeaderComponent={
           <View style={styles.header}>
-            <LinearGradient
-              colors={['#4f8cff', 'rgba(79,140,255,0.25)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.badge}
-            >
-              <Ionicons name="trophy" size={22} color="#fff" />
-            </LinearGradient>
-            <Text style={styles.title}>Achievements</Text>
-            <Text style={styles.subtitle}>Manuals you've completed. Review anytime.</Text>
+            <View style={styles.headerContent}>
+              <View style={styles.headerText}>
+                <Text style={styles.title}>Achievements</Text>
+                <Text style={styles.subtitle}>Manuals you've completed. Review anytime.</Text>
+              </View>
+            </View>
+            <NotificationButton />
           </View>
         }
       />
@@ -107,16 +105,13 @@ export default function AchievementScreen() {
       }
       ListHeaderComponent={
         <View style={styles.header}>
-          <LinearGradient
-            colors={['#4f8cff', 'rgba(79,140,255,0.25)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.badge}
-          >
-            <Ionicons name="checkmark-circle" size={22} color="#fff" />
-          </LinearGradient>
-          <Text style={styles.title}>Achievements</Text>
-          <Text style={styles.subtitle}>Manuals you've completed. Review anytime.</Text>
+          <View style={styles.headerContent}>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Achievements</Text>
+              <Text style={styles.subtitle}>Manuals completed. Review anytime.</Text>
+            </View>
+          </View>
+          <NotificationButton />
         </View>
       }
       ListEmptyComponent={
@@ -142,7 +137,21 @@ const BORDER = 'rgba(255,255,255,0.12)';
 
 const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl * 2 },
-  header: { marginBottom: spacing.lg },
+  header: {
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  headerText: {
+    flex: 1,
+  },
   badge: {
     width: 44,
     height: 44,

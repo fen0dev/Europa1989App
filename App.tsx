@@ -1,7 +1,9 @@
+// App.tsx
+
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StatusBar } from 'react-native';
 import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import RootTabs from './src/navigation/tabs/RootTabs';
 import AuthNavigator from './src/navigation/auth/AuthNavigator';
@@ -12,8 +14,8 @@ import linking from './src/navigation/linking';
 import { colors } from './src/theme/tokens';
 import { ToastProvider } from './src/screens/notification/toast/Toast';
 import { hasCompletedOnboarding } from './src/hooks/onboarding/onboardingStorage';
-
-const queryClient = new QueryClient();
+import { queryClient } from './src/lib/queryClient';
+import { notificationService } from './src/lib/notifiations/notificationService';
 
 const theme: Theme = {
   ...DarkTheme,
@@ -27,32 +29,82 @@ const theme: Theme = {
   },
 };
 
-export default function App() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | undefined>(undefined);
+type AppState = 'loading' | 'onboarding' | 'authenticated' | 'unauthenticated';
 
+// Componente interno che può accedere al QueryClient tramite hook
+function AuthenticatedApp() {
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      // when user logs in check if they have seen onbaording
-      if (s) {
-        hasCompletedOnboarding().then(setHasSeenOnboarding);
-      } else {
-        setHasSeenOnboarding(undefined);
-      }
+    // Initialize notification service when authenticated
+    notificationService.initialize(queryClient, {
+      onUnreadCountChanged: (count) => {
+        // Update badge count if needed
+        console.log('Unread notifications:', count);
+      },
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => {
+      notificationService.cleanup();
+    };
   }, []);
 
-  // check onboarding when there is a sessino
-  useEffect(() => {
-    if (session) {
-      hasCompletedOnboarding().then(setHasSeenOnboarding);
-    }
-  }, [session]);
+  return <RootTabs />;
+}
 
-  if (session === undefined || (session && hasSeenOnboarding === undefined)) {
+export default function App() {
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [appState, setAppState] = useState<AppState>('loading');
+
+  useEffect(() => {
+    // Inizializza sessione
+    let mounted = true;
+    
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session);
+
+      if (data.session) {
+        hasCompletedOnboarding().then((hasSeen) => {
+            if (!mounted) return;
+            setAppState(hasSeen ? 'authenticated' : 'onboarding');
+        }).catch(() => {
+            if (!mounted) return;
+            setAppState('onboarding');
+        });
+      } else {
+          setAppState('unauthenticated');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
+      if (!mounted) return;
+      
+      setSession(s);
+      
+      if (s) {
+        // Utente autenticato: controlla onboarding una sola volta
+        try {
+          const hasSeenOnboarding = await hasCompletedOnboarding();
+          setAppState(hasSeenOnboarding ? 'authenticated' : 'onboarding');
+        } catch (error) {
+          // In caso di errore, assumi che l'onboarding non sia stato completato
+          setAppState('onboarding');
+        }
+      } else {
+        setAppState('unauthenticated');
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleOnboardingComplete = () => {
+    setAppState('authenticated');
+  };
+
+  if (appState === 'loading') {
     return (
       <SafeAreaProvider>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0b0f14' }}>
@@ -62,11 +114,10 @@ export default function App() {
     );
   }
 
-  // show onboarding if user is logged in and hasn't seen onboarding yet
-  if (session && hasSeenOnboarding === false) {
+  if (appState === 'onboarding') {
     return (
-        <SafeAreaProvider>
-          <OnboardingScreen onComplete={() => setHasSeenOnboarding(true) } />
+      <SafeAreaProvider>
+        <OnboardingScreen onComplete={handleOnboardingComplete} />
       </SafeAreaProvider>
     );
   }
@@ -76,7 +127,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
           <NavigationContainer linking={linking} theme={theme}>
-            {session ? <RootTabs /> : <AuthNavigator />}
+            {appState === 'authenticated' ? <AuthenticatedApp /> : <AuthNavigator />}
           </NavigationContainer>
           <StatusBar barStyle="light-content" />
         </ToastProvider>

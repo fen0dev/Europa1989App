@@ -20,6 +20,7 @@ import { useToast } from '../screens/notification/toast/Toast';
 import { useFormValidation, validators } from '../hooks/useFormValidation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useNavigation } from '@react-navigation/native';
 
 const ACCENT_PALETTE = ['#4FFFBF', '#FF85F3', '#8AE2FF', '#FFD166', '#FF6B6B', '#9B5DFF'];
 const FUN_NICKNAMES = [
@@ -64,6 +65,7 @@ export default function ProfileScreen() {
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const navigation = useNavigation<any>();
   const topPad = Math.max(headerHeight, insets.top) + 15;
 
   const [fullName, setFullName] = useState('');

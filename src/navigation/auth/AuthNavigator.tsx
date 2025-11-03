@@ -1,12 +1,13 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { AuthStackParamList } from '../types';
 import LoginScreen from "../../screens/login/LoginScreen";
 import ForgotPasswordScreen from '../../screens/login/ForgotPasswordScreen';
 import ResetPasswordScreen from '../../screens/login/ResetPasswordScreen';
 import MFAEnrollScreen from '../../screens/login/MFAEnrollScreen';
 import MFAVerifyScreen from '../../screens/login/MFAVerifyScreen';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export default function AuthNavigator() {
     return (

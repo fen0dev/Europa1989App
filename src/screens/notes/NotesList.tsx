@@ -10,6 +10,7 @@ import { NoteCard } from './NoteCard';
 import { useToast } from '../../screens/notification/toast/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { logger, handleApiError } from '../../lib/errors';
 
 type NoteListProps = {
     manualId: string;
@@ -48,15 +49,19 @@ export function NotesList({ manualId, sectionId, articleId, onNotePress }: NoteL
             note_type: selectedType,
         }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['manual-notes', manualId] });
+            queryClient.invalidateQueries({
+              queryKey: ['manual-notes', manualId, sectionId, articleId],
+              exact: true
+            });
             setShowAddModal(false);
             setNoteContent('');
             toasts.showToast('Note created successfully', 'success');
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
         onError: (err: any) => {
-            toasts.showToast(err.message || 'Failed to add note. Please try again.', 'error');
-            if (__DEV__) console.error(err);
+          const appError = handleApiError(err);
+          toasts.showToast(appError.userMessage || 'Failed to add note. Please try again.', 'error');
+          logger.error('Failed to create note', err, { manualId, sectionId, articleId });
         },
     });
 

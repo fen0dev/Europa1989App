@@ -17,6 +17,7 @@ import EmptyState from './error/EmptyState';
 import { NotesList } from './notes/NotesList';
 import { SkeletonLoader } from './loader/SkeletonLoader';
 import * as Haptics from 'expo-haptics';
+import { logger, handleApiError } from '../lib/errors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManualDetail'>;
 
@@ -161,9 +162,10 @@ export default function ManualDetailScreen({ route, navigation }: Props) {
         setSubmitting(false);
       }, 800);
     } catch (err: any) {
-      console.error('Failed to complete manual:', err);
+      const appError = handleApiError(err);
+      logger.error('Failed to complete manual', err, { manualId });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      toast.showToast('Failed to complete manual. Please try again.', 'error');
+      toast.showToast(appError.userMessage || 'Failed to complete manual. Please try again.', 'error');
       setSubmitting(false);
     }
   };

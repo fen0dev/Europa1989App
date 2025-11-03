@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useToast } from './notification/toast/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { logger, handleApiError } from '../lib/errors';
 
 type Props = { route: any; navigation: any };
 
@@ -107,9 +108,10 @@ export default function PDFViewerScreen({ route, navigation }: Props) {
                 setSubmitting(false);
             }, 800);
         } catch (err: any) {
-            console.error('Failed to complete manual:', err);
+            const appError = handleApiError(err);
+            logger.error('Failed to complete manual', err, { manualId });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            toast.showToast('Failed to complete manual. Please try again.', 'error');
+            toast.showToast(appError.userMessage || 'Failed to complete manual. Please try again.', 'error');
             setSubmitting(false);
         }
     };

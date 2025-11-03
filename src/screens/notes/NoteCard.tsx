@@ -9,6 +9,7 @@ import { useToast } from '../../screens/notification/toast/Toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toggleNoteReaction } from '../../api/notes';
 import * as Haptics from 'expo-haptics';
+import { logger, handleApiError } from '../../lib/errors';
 
 type NoteCardProps = {
     note: ManualNote;
@@ -37,8 +38,9 @@ export function NoteCard({ note, onPress, onDelete, showDelete = false }: NoteCa
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         },
         onError: (err: any) => {
-            toast.showToast('Failed to react. Please try again.', 'error');
-            if (__DEV__) console.error(err);
+            const appError = handleApiError(err);
+            toast.showToast(appError.userMessage || 'Failed to react. Please try again.', 'error');
+            logger.error('Failed to toggle note reaction', err, { noteId: note.id });
         },
     });
 

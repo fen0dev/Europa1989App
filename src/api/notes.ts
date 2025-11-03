@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { handleApiError, AppError, ErrorCode } from '../lib/errors';
 
 export type NoteType = 'tip' | 'warn' | 'ask' | 'clarify';
 
@@ -34,6 +35,19 @@ export type CreateNoteInput = {
 };
 
 export type NoteReactionType = 'helpful' | 'like' | 'warning';
+
+export type PaginationOptions = {
+    page?: number;
+    pageSize?: number;
+};
+  
+export type PaginatedResponse<T> = {
+    data: T[];
+    page: number;
+    pageSize: number;
+    total: number;
+    hasMore: boolean;
+};
 
 /**
  * Get all notes for a manual with id (with optional filters) 
@@ -76,10 +90,20 @@ export async function getManualNotes(
         query = query.order('created_at', { ascending: false });
     }
 
-    const { data, error } = await query;
-
-    if (error) throw error;
-    return (data ?? []) as ManualNote[];
+    try {
+        const { data, error } = await query;
+        
+        if (error) {
+            throw handleApiError(error);
+        }
+        
+        return (data ?? []) as ManualNote[];
+    } catch (error) {
+        if (error instanceof AppError) {
+            throw error;
+        }
+        throw handleApiError(error);
+    }
 }
 
 export async function createManualNote(input: CreateNoteInput): Promise<ManualNote> {
@@ -106,7 +130,7 @@ export async function createManualNote(input: CreateNoteInput): Promise<ManualNo
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) throw handleApiError(error);
     // charge with stats from view
     return getNoteById(data.id);
 }
@@ -121,7 +145,7 @@ export async function getNoteById(noteId: string): Promise<ManualNote> {
         .eq('id', noteId)
         .single();
 
-    if (error) throw error;
+    if (error) throw handleApiError(error);
     return data as ManualNote;
 }
 
@@ -149,7 +173,7 @@ export async function updateManualNote(
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) throw handleApiError(error);
 
     return getNoteById(noteId);
 }
@@ -168,7 +192,7 @@ export async function deleteManualNote(noteId: string): Promise<void> {
         .eq('id', noteId)
         .eq('user_id', userId);
 
-    if (error) throw error;
+    if (error) throw handleApiError(error);
 }
 
 /**
@@ -197,7 +221,7 @@ export async function toggleNoteReaction(
                 .delete()
                 .eq('id', existing.id);
             
-            if (error) throw error;
+            if (error) throw handleApiError(error);
         } else {
             // update reaction type
             const { error } = await supabase
@@ -205,7 +229,7 @@ export async function toggleNoteReaction(
                 .update({ reaction_type: reactionType })
                 .eq('id', existing.id);
             
-            if (error) throw error;
+            if (error) throw handleApiError(error);
         }
     } else {
         // create new reaction
@@ -217,7 +241,7 @@ export async function toggleNoteReaction(
                 reaction_type: reactionType,
             });
 
-        if (error) throw error;
+        if (error) throw handleApiError(error);
     }
 }
 
@@ -229,26 +253,99 @@ export async function getManualNotesStats(manualId: string): Promise<{
     by_type: Record<NoteType, number>;
     helpful_count: number;
 }> {
-    const notes = await getManualNotes(manualId);
-  
-    const stats = {
-      total: notes.length,
-      by_type: {
-        tip: 0,
-        warn: 0,
-        ask: 0,
-        clarify: 0,
-      } as Record<NoteType, number>,
-      helpful_count: 0,
-    };
-  
-    notes.forEach((note) => {
-      const noteType = note.note_type as NoteType;
-      if (noteType === 'tip' || noteType === 'warn' || noteType === 'ask' || noteType === 'clarify') {
-        stats.by_type[noteType]++;
-      }
-      stats.helpful_count += note.helpful_content;
+    // Query aggregata lato database invece di caricare tutte le note
+    const { data, error } = await supabase.rpc('get_manual_notes_stats', {
+        p_manual_id: manualId,
     });
-  
-    return stats;
+
+    if (error) {
+        // Fallback: se RPC non esiste, usa query aggregata
+        const { data: fallbackData, error: fallbackError } = await supabase
+            .from('v_manual_notes_with_stats')
+            .select('note_type, helpful_content')
+            .eq('manual_id', manualId);
+
+        if (fallbackError) throw handleApiError(fallbackError);
+
+        const stats = {
+            total: fallbackData?.length ?? 0,
+            by_type: {
+                tip: 0,
+                warn: 0,
+                ask: 0,
+                clarify: 0,
+            } as Record<NoteType, number>,
+            helpful_count: 0,
+        };
+
+        fallbackData?.forEach((note) => {
+            const noteType = note.note_type as NoteType;
+            if (stats.by_type.hasOwnProperty(noteType)) {
+                stats.by_type[noteType]++;
+            }
+            stats.helpful_count += note.helpful_content ?? 0;
+        });
+
+        return stats;
+    }
+
+    return data;
+}
+
+export async function getManualNotesPaginated(
+    manual_id: string,
+    options?: {
+        sectionId?: string;
+        articleId?: string;
+        noteType?: NoteType;
+        sortBy?: 'recent' | 'helpful' | 'oldest';
+        pagination?: PaginationOptions;
+    }
+): Promise<PaginatedResponse<ManualNote>> {
+    const page = options?.pagination?.page ?? 1;
+    const pageSize = options?.pagination?.pageSize ?? 20;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    let query = supabase
+        .from('v_manual_notes_with_stats')
+        .select('*', { count: 'exact' })
+        .eq('manual_id', manual_id)
+        .range(from, to);
+    
+    if (options?.sectionId) {
+        query = query.eq('section_id', options.sectionId);
+    }
+
+    if (options?.articleId) {
+        query = query.eq('article_id', options.articleId);
+    }
+
+    if (options?.noteType) {
+        query = query.eq('note_type', options.noteType);
+    }
+
+    // sorting
+    const sortBy = options?.sortBy || 'recent';
+    if (sortBy === 'helpful') {
+        query = query.order('helpful_content', { ascending: false });
+        query = query.order('created_at', { ascending: false });
+    } else if (sortBy === 'oldest') {
+        query = query.order('created_at', { ascending: true });
+    } else {
+        query = query.order('is_pinned', { ascending: false });
+        query = query.order('created_at', { ascending: false });
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw handleApiError(error);
+    
+    return {
+        data: (data ?? []) as ManualNote[],
+        page,
+        pageSize,
+        total: count ?? 0,
+        hasMore: (count ?? 0) > to + 1,
+    };
 }

@@ -22,6 +22,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { ManualCardSkeleton } from '../screens/loader/SkeletonLoader';
 import ErrorView from '../screens/error/ErrorView';
 import EmptyState from '../screens/error/EmptyState';
+import NotificationButton from '../components/NotificationButton';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Manuals'>;
 
@@ -80,16 +81,13 @@ export default function ManualsScreen({ navigation }: Props) {
         contentContainerStyle={[styles.list, { paddingTop: topPad }]}
       >
         <View style={styles.header}>
-          <LinearGradient
-            colors={['rgba(79, 255, 164, 0.75)', 'rgba(79, 255, 208, 0.25)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.badge}
-          >
-            <Ionicons name="book-outline" size={22} color="#fff" />
-          </LinearGradient>
-          <Text style={styles.title}>Manuals</Text>
-          <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+          <View style={styles.headerContent}>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Manuals</Text>
+              <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+            </View>
+          </View>
+          <NotificationButton />
         </View>
         {[1, 2, 3].map((i) => (
           <ManualCardSkeleton key={i} />
@@ -133,16 +131,13 @@ export default function ManualsScreen({ navigation }: Props) {
         }
       >
         <View style={styles.header}>
-          <LinearGradient
-            colors={['rgba(79, 255, 164, 0.75)', 'rgba(79, 255, 208, 0.25)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.badge}
-          >
-            <Ionicons name="book-outline" size={22} color="#fff" />
-          </LinearGradient>
-          <Text style={styles.title}>Manuals</Text>
-          <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+          <View style={styles.headerContent}>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Manuals</Text>
+              <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+            </View>
+          </View>
+          <NotificationButton />
         </View>
 
         {visible.length === 0 ? (
@@ -176,7 +171,7 @@ export default function ManualsScreen({ navigation }: Props) {
                 {notesStats && notesStats.total > 0 && (
                   <View style={styles.notesOutsideSection}>
                     <View style={styles.notesOutsideBadge}>
-                      <Ionicons name="document-text-outline" size={14} color="#4f8cff" />
+                      <Ionicons name="document-text-outline" size={14} color="#fff" />
                       <Text style={styles.notesOutsideText}>
                         {notesStats.total} {notesStats.total === 1 ? 'note' : 'notes'} from colleagues
                       </Text>
@@ -394,7 +389,21 @@ const GLASS = 'rgba(255,255,255,0.06)';
 
 const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl * 2 },
-  header: { marginBottom: spacing.lg },
+  header: {
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  headerText: {
+    flex: 1,
+  },
   badge: {
     width: 44,
     height: 44,
@@ -673,16 +682,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: 'rgba(79, 140, 255, 0.12)',
+    backgroundColor: 'rgba(79, 255, 229, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(79, 140, 255, 0.25)',
+    borderColor: 'rgba(79, 255, 232, 0.25)',
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     alignSelf: 'flex-start',
   },
   notesOutsideText: {
-    color: '#4f8cff',
+    color: '#fff',
     fontSize: 13,
     fontWeight: '600',
   },

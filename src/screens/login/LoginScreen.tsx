@@ -16,8 +16,12 @@ import { colors, radius, spacing, shadow } from '../../theme/tokens';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../screens/notification/toast/Toast';
 import { useFormValidation, validators } from '../../hooks/useFormValidation';
+import { AuthStackScreenProps } from '../../navigation/types';
+import { handleApiError, ErrorCode } from '../../lib/errors';
 
-export default function LoginScreen({ navigation}: any) {
+type Props = AuthStackScreenProps<'Login'>;
+
+export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,45 +42,67 @@ export default function LoginScreen({ navigation}: any) {
     }
 
     setLoading(true);
-  
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  
-    if (data?.session) { 
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (data?.session) {
+        toast.showToast('Welcome back!', 'success');
+        return;
+      }
+
+      // Gestione MFA
+      if (error && (error.message?.toLowerCase().includes('mfa') || error.status === 403)) {
+        await handleMFAFlow();
+        return;
+      }
+
+      // Altri errori
+      const appError = handleApiError(error);
+      toast.showToast(appError.userMessage || 'Invalid email or password', 'error');
+    } catch (err: any) {
+      const appError = handleApiError(err);
+      toast.showToast(appError.userMessage || 'Login failed. Please try again.', 'error');
+    } finally {
       setLoading(false);
-      toast.showToast('Welcome back!', 'success');
-      return;
     }
-  
-    // MFA richiesta
-    if (error && (error.message?.toLowerCase().includes('mfa') || (error as any).status === 403)) {
+  }
+
+  async function handleMFAFlow() {
+    try {
       const { data: list, error: listErr } = await supabase.auth.mfa.listFactors();
-      if (listErr) { 
-        setLoading(false); 
-        toast.showToast('MFA error. Please try again.', 'error');
-        return; 
+      
+      if (listErr) {
+        const appError = handleApiError(listErr);
+        toast.showToast(appError.userMessage || 'MFA error. Please try again.', 'error');
+        return;
       }
-      const totp = list?.totp?.find((f: any) => f.status === 'verified');
-  
-      if (!totp) { 
-        setLoading(false); 
-        navigation.replace('MFAEnroll'); 
-        return; 
+
+      const totp = list?.totp?.find((f) => f.status === 'verified');
+
+      if (!totp) {
+        navigation.replace('MFAEnroll');
+        return;
       }
-  
-      const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({ factorId: totp.id });
-      if (chErr || !challenge?.id) { 
-        setLoading(false); 
-        toast.showToast('MFA not available', 'error');
-        return; 
+
+      const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({ 
+        factorId: totp.id 
+      });
+
+      if (chErr || !challenge?.id) {
+        const appError = handleApiError(chErr);
+        toast.showToast(appError.userMessage || 'MFA not available', 'error');
+        return;
       }
-  
-      setLoading(false);
-      navigation.replace('MFAVerify', { factorId: totp.id, challengeId: challenge.id });
-      return;
+
+      navigation.replace('MFAVerify', { 
+        factorId: totp.id, 
+        challengeId: challenge.id 
+      });
+    } catch (err: any) {
+      const appError = handleApiError(err);
+      toast.showToast(appError.userMessage || 'MFA setup failed', 'error');
     }
-  
-    toast.showToast('Invalid email or password', 'error');
-    setLoading(false);
   }
 
   return (

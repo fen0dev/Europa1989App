@@ -86,7 +86,9 @@ export default function GlassTabBar({ state, descriptors, navigation }: BottomTa
                     style={[styles.tab, { width: tabWidth }]}
                     activeOpacity={0.9}
                   >
-                    <Ionicons name={iconName as any} size={24} color={isFocused ? activeColor : inactiveColor} />
+                    <View style={styles.iconContainer}>
+                      <Ionicons name={iconName as any} size={24} color={isFocused ? activeColor : inactiveColor} />
+                    </View>
                     <Text 
                       style={[
                         styles.label,
@@ -143,5 +145,8 @@ const styles = StyleSheet.create({
     },
     labelActive: {
         fontWeight: '700',
+    },
+    iconContainer: {
+        position: 'relative',
     },
 });

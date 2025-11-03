@@ -11,6 +11,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import ErrorView from './error/ErrorView';
 import { NotesList } from './notes/NotesList';
 import { SkeletonLoader } from './loader/SkeletonLoader';
+import { logger, handleApiError } from '../lib/errors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Article'>;
 
@@ -35,7 +36,9 @@ export default function ArticleScreen({ route }: Props) {
 
   useEffect(() => {
     if (article?.id) {
-      trackArticleRead(article.id).catch(() => {});
+      trackArticleRead(article.id).catch((err) => {
+        logger.warn('Failed to track article read', { articleId: article.id, err });
+      });
     }
   }, [article?.id]);
 
