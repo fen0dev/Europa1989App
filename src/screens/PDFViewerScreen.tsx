@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, Platform, Pressable, Text, Modal, Animated, ScrollView } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Platform, Pressable, Text, Modal, Animated, ScrollView, PanResponder, Dimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { colors, spacing, radius } from '../theme/tokens';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
@@ -8,8 +8,13 @@ import { getManualQuestions, submitAllAnswers, rpcAckManual } from '../api/quiz'
 import { Ionicons } from '@expo/vector-icons';
 import { useToast } from './notification/toast/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { logger, handleApiError } from '../lib/errors';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SHEET_HEIGHT = SCREEN_HEIGHT * 0.85;
+const DRAG_THRESHOLD = 100;
 
 type Props = { route: any; navigation: any };
 
@@ -44,39 +49,76 @@ export default function PDFViewerScreen({ route, navigation }: Props) {
     const [submitting, setSubmitting] = useState(false);
     const [pdfLoading, setPdfLoading] = useState(true);
     const [pdfError, setPdfError] = useState(false);
-    const slideAnim = useRef(new Animated.Value(500)).current;
-    const backdropAnim = useRef(new Animated.Value(0)).current;
+    const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+    const opacity = useRef(new Animated.Value(0)).current;
+    const pan = useRef(new Animated.ValueXY()).current;
+
+    const panResponder = useRef(
+        PanResponder.create({
+          onStartShouldSetPanResponder: () => true,
+          onMoveShouldSetPanResponder: (_, gestureState) => {
+            return Math.abs(gestureState.dy) > 5;
+          },
+          onPanResponderMove: (_, gestureState) => {
+            if (gestureState.dy > 0) {
+              pan.setValue({ x: 0, y: gestureState.dy });
+            }
+          },
+          onPanResponderRelease: (_, gestureState) => {
+            if (gestureState.dy > DRAG_THRESHOLD) {
+              closeQuizSheet();
+            } else {
+              Animated.spring(pan, {
+                toValue: { x: 0, y: 0 },
+                useNativeDriver: true,
+                tension: 50,
+                friction: 8,
+              }).start();
+            }
+          },
+        })
+      ).current;
 
     useEffect(() => {
         if (showQuiz) {
           Animated.parallel([
-            Animated.timing(backdropAnim, {
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 50,
+              friction: 8,
+            }),
+            Animated.timing(opacity, {
               toValue: 1,
               duration: 200,
-              useNativeDriver: true,
-            }),
-            Animated.spring(slideAnim, {
-              toValue: 0,
-              friction: 8,
-              tension: 65,
               useNativeDriver: true,
             }),
           ]).start();
         } else {
           Animated.parallel([
-            Animated.timing(backdropAnim, {
-              toValue: 0,
-              duration: 150,
+            Animated.spring(translateY, {
+              toValue: SHEET_HEIGHT,
               useNativeDriver: true,
+              tension: 50,
+              friction: 8,
             }),
-            Animated.timing(slideAnim, {
-              toValue: 500,
+            Animated.timing(opacity, {
+              toValue: 0,
               duration: 200,
               useNativeDriver: true,
             }),
           ]).start();
+          pan.setValue({ x: 0, y: 0 });
         }
     }, [showQuiz]);
+
+    const closeQuizSheet = () => {
+        if (!submitting) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            pan.setValue({ x: 0, y: 0 });
+            setShowQuiz(false);
+        }
+    };
 
     const [answers, setAnswers] = useState<Record<string, 'A' | 'B'>>({});
     const { data: questions = [] } = useQuery({
@@ -191,31 +233,78 @@ export default function PDFViewerScreen({ route, navigation }: Props) {
             </View>
 
             {/* Modal Quiz */}
-            <Modal visible={showQuiz} transparent animationType="none" onRequestClose={() => !submitting && setShowQuiz(false)}>
-                <Animated.View style={[modalStyles.backdrop, { opacity: backdropAnim }]}>
-                    <Pressable 
-                        style={{ flex: 1 }} 
-                        onPress={() => !submitting && setShowQuiz(false)}
+            <Modal 
+                visible={showQuiz} 
+                transparent 
+                animationType="none" 
+                onRequestClose={closeQuizSheet}
+                statusBarTranslucent
+            >
+                <View style={modalStyles.container}>
+                    {/* Backdrop */}
+                    <Animated.View
+                        style={[
+                            modalStyles.backdrop,
+                            {
+                                opacity,
+                            },
+                        ]}
+                    >
+                        <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+                    </Animated.View>
+
+                    {/* Backdrop press handler */}
+                    <Pressable
+                        style={modalStyles.backdropPressable}
+                        onPress={closeQuizSheet}
                         disabled={submitting}
                     />
-                    <Animated.View style={[modalStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+
+                    {/* Sheet */}
+                    <Animated.View
+                        style={[
+                            modalStyles.sheet,
+                            {
+                                height: SHEET_HEIGHT,
+                                paddingBottom: insets.bottom,
+                                transform: [
+                                    {
+                                        translateY: Animated.add(
+                                            translateY,
+                                            pan.y
+                                        ),
+                                    },
+                                ],
+                            },
+                        ]}
+                        {...panResponder.panHandlers}
+                    >
+                        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+                        
+                        {/* Handle bar */}
+                        <View style={modalStyles.handleContainer}>
+                            <View style={modalStyles.handle} />
+                        </View>
+
                         <ScrollView
-                            showsVerticalScrollIndicator={true}
+                            showsVerticalScrollIndicator={false}
                             contentContainerStyle={modalStyles.scrollContent}
                         >
-                            <View style={modalStyles.modalHeader}>
+                            {/* Header */}
+                            <View style={modalStyles.header}>
                                 <View>
-                                    <Text style={modalStyles.title}>Quick Check</Text>
-                                    <Text style={modalStyles.progressText}>
+                                    <Text style={modalStyles.headerTitle}>Quick Check</Text>
+                                    <Text style={modalStyles.headerSubtitle}>
                                         {Object.keys(answers).length} of {questions.length} answered
                                     </Text>
                                 </View>
                                 <Pressable
-                                    onPress={() => !submitting && setShowQuiz(false)}
+                                    onPress={closeQuizSheet}
                                     disabled={submitting}
+                                    style={modalStyles.closeBtn}
                                     accessibilityLabel="Close quiz"
                                 >
-                                    <Ionicons name="close" size={24} color={colors.fg} />
+                                    <Ionicons name="close" size={20} color={colors.fg} />
                                 </Pressable>
                             </View>
                             <Text style={modalStyles.subtitle}>Answer all {questions.length} questions to complete this manual.</Text>
@@ -238,7 +327,7 @@ export default function PDFViewerScreen({ route, navigation }: Props) {
 
                             <View style={modalStyles.footerRow}>
                                 <Pressable
-                                    onPress={() => !submitting && setShowQuiz(false)}
+                                    onPress={closeQuizSheet}
                                     style={modalStyles.cancelBtn}
                                     disabled={submitting}
                                 >
@@ -263,7 +352,7 @@ export default function PDFViewerScreen({ route, navigation }: Props) {
                             </View>
                         </ScrollView>
                     </Animated.View>
-                </Animated.View>
+                </View>
             </Modal>
         </View>
     );
@@ -458,32 +547,77 @@ const styles = StyleSheet.create({
 });
 
 const modalStyles = StyleSheet.create({
-    backdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.87)', justifyContent: 'flex-end' },
+    container: {
+        flex: 1,
+    },
+    backdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    },
+    backdropPressable: {
+        ...StyleSheet.absoluteFillObject,
+    },
     sheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         backgroundColor: colors.bg,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
+        overflow: 'hidden',
+    },
+    handleContainer: {
+        alignItems: 'center',
+        paddingVertical: spacing.sm,
+    },
+    handle: {
+        width: 36,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255,255,255,0.3)',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.xl,
+        paddingBottom: spacing.md,
+    },
+    headerTitle: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: colors.fg,
+    },
+    headerSubtitle: {
+        fontSize: 14,
+        color: 'rgba(232,238,247,0.6)',
+        marginTop: 4,
+    },
+    closeBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255,255,255,0.08)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.12)',
-        maxHeight: '90%',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    subtitle: { 
+        color: 'rgba(232,238,247,0.75)', 
+        marginBottom: spacing.md,
+        paddingHorizontal: spacing.xl,
+        fontSize: 15,
     },
     scrollContent: {
-        padding: spacing.lg,
+        paddingBottom: spacing.xl * 2,
     },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
+    qBox: { 
+        marginBottom: spacing.lg, 
+        gap: 10,
+        paddingHorizontal: spacing.xl,
     },
-    title: { color: colors.fg, fontSize: 20, fontWeight: '700' },
-    progressText: {
-        color: 'rgba(232,238,247,0.6)',
-        fontSize: 13,
-        marginTop: 2,
-    },
-    subtitle: { color: 'rgba(232,238,247,0.75)', marginBottom: spacing.md },
-    qBox: { marginBottom: spacing.lg, gap: 10 },
     questionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -506,26 +640,32 @@ const modalStyles = StyleSheet.create({
     },
     optActive: { borderColor: 'rgba(79, 255, 193, 0.43)', backgroundColor: 'rgba(79, 255, 211, 0.18)' },
     optText: { color: colors.fg, fontSize: 14 },
-    footerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: spacing.md },
+    footerRow: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        gap: 10, 
+        marginTop: spacing.md,
+        paddingHorizontal: spacing.xl,
+    },
     cancelBtn: {
         flex: 1,
         backgroundColor: 'rgba(255,255,255,0.06)',
         borderColor: 'rgba(255,255,255,0.12)',
         borderWidth: 1,
-        borderRadius: radius.xl,
+        borderRadius: radius.lg,
         paddingVertical: spacing.md,
         alignItems: 'center',
     },
-    cancelText: { color: colors.fg, fontWeight: '700' },
+    cancelText: { color: colors.fg, fontWeight: '700', fontSize: 15 },
     ctaBtn: {
         flex: 1,
         backgroundColor: 'rgba(2, 177, 81, 0.44)',
-        borderRadius: radius.xl,
+        borderRadius: radius.lg,
         paddingVertical: spacing.md,
         alignItems: 'center',
     },
     ctaBtnDisabled: {
         opacity: 0.6,
     },
-    ctaText: { color: '#fff', fontWeight: '800' },
+    ctaText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

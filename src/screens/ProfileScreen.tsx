@@ -21,6 +21,8 @@ import { useFormValidation, validators } from '../hooks/useFormValidation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
+import { useAdmin } from '../hooks/useAdmin';
 
 const ACCENT_PALETTE = ['#4FFFBF', '#FF85F3', '#8AE2FF', '#FFD166', '#FF6B6B', '#9B5DFF'];
 const FUN_NICKNAMES = [
@@ -61,6 +63,8 @@ function getSecondaryTextColor(primary: string) {
 }
 
 export default function ProfileScreen() {
+  const { isAdmin, loading: adminLoading } = useAdmin();
+
   const queryClient = useQueryClient();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -303,6 +307,40 @@ export default function ProfileScreen() {
         </View>
       </View>
     </View>
+
+      {adminLoading ? (
+        <View style={styles.section}>
+          <View style={styles.adminButton}>
+            <ActivityIndicator color="#4FFFBF" size="small" />
+            <Text style={[styles.adminButtonText, { marginLeft: 12 }]}>Checking admin permissions...</Text>
+          </View>
+        </View>
+      ) : isAdmin ? (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.adminButton}
+            onPress={() => {
+              try {
+                // Navigate to Home tab and then to AdminStack screen
+                navigation.dispatch(
+                  CommonActions.navigate({
+                    name: 'Home',
+                    params: {
+                      screen: 'AdminStack',
+                    },
+                  })
+                );
+              } catch (error) {
+                toast.showToast('Error accessing admin area', 'error');
+              }
+            }}
+          >
+            <Ionicons name="settings-outline" size={20} color="#4FFFBF" />
+            <Text style={styles.adminButtonText}>Admin Area</Text>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Text style={styles.label}>Email</Text>
@@ -742,5 +780,43 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
     marginTop: spacing.xs / 2,
     marginLeft: 0,
+  },
+  adminButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(79, 255, 191, 0.1)',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(79, 255, 191, 0.3)',
+  },
+  adminButtonText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4FFFBF',
+  },
+  adminIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(79, 255, 191, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  adminContent: {
+    flex: 1,
+  },
+  adminTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4FFFBF',
+    marginBottom: 4,
+  },
+  adminSubtitle: {
+    fontSize: 13,
+    color: 'rgba(232,238,247,0.6)',
   },
 });

@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { logger, handleApiError } from '../lib/errors';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { clearAdminCache } from './admin';
 
 export type UserProfile = {
     id: string;
@@ -156,5 +157,6 @@ export async function uploadProfileImage(): Promise<string> {
 */
 export async function logout(): Promise<void> {
     const { error } = await supabase.auth.signOut();
+    clearAdminCache();
     if (error) throw handleApiError(error);
 }

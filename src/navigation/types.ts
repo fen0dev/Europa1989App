@@ -7,6 +7,13 @@ export type RootStackParamList = {
   Section: { sectionId: string; title?: string };
   Article: { articleId: string; title?: string };
   PDF: { manualId: string; pdfUrl: string; title?: string };
+  AdminStack: undefined;
+  AdminManualList: undefined;
+  AdminManualEdit: { manualId?: string };
+  AdminSectionEdit: { sectionId?: string; manualId: string };
+  AdminArticleEdit: { articleId?: string; sectionId: string };
+  AdminQuestions: { manualId: string };
+  AdminNotesModeration: { manualId: string };
 };
 
 export type AuthStackParamList = {
