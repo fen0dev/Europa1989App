@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
   Image,
   Animated,
 } from 'react-native';
+
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Manual>);
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { getManuals, type Manual, getMyManualAcks, getManualCompletions, type ManualCompletion } from '../api/manuals';
 import { getManualNotesStats } from '../api/notes';
@@ -36,6 +38,7 @@ export default function ManualsScreen({ navigation }: Props) {
   const completionsQ = useQuery({ queryKey: ['manual-completions'], queryFn: () => getManualCompletions(), staleTime: 30_000 });
 
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!manualsQ.isLoading && manualsQ.data) {
@@ -76,23 +79,24 @@ export default function ManualsScreen({ navigation }: Props) {
 
   if (manualsQ.isLoading || acksQ.isLoading || completionsQ.isLoading) {
     return (
-      <ScrollView
+      <FlatList
         style={{ backgroundColor: colors.bg }}
         contentContainerStyle={[styles.list, { paddingTop: topPad }]}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Manuals</Text>
-              <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+        data={[1, 2, 3]}
+        keyExtractor={(i) => i.toString()}
+        renderItem={() => <ManualCardSkeleton />}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerText}>
+                <Text style={styles.title}>Manuals</Text>
+                <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+              </View>
             </View>
+            <NotificationButton />
           </View>
-          <NotificationButton />
-        </View>
-        {[1, 2, 3].map((i) => (
-          <ManualCardSkeleton key={i} />
-        ))}
-      </ScrollView>
+        }
+      />
     );
   }
 
@@ -113,11 +117,42 @@ export default function ManualsScreen({ navigation }: Props) {
   const completionsError = completionsQ.error;
   const completionsMap = completionsError ? {} : (completionsQ.data ?? {});
 
+  const renderItem = ({ item, index }: { item: Manual; index: number }) => {
+    const targetVersion = item.manual_version ?? 1;
+    const ackVersion = acks[item.id] ?? 0;
+    const completed = ackVersion >= targetVersion;
+    const notesStats = notesStatsMap[item.id];
+
+    return (
+      <AnimatedCard
+        index={index}
+        item={item}
+        completed={completed}
+        completions={completionsMap[item.id] ?? []}
+        notesStats={notesStats}
+        scrollY={scrollY}
+        onPress={() => {
+          requestAnimationFrame(() =>
+            navigation.push('ManualDetail', { manualId: item.id, title: item.title })
+          );
+        }}
+      />
+    );
+  };
+
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-      <ScrollView
+      <AnimatedFlatList
         style={{ backgroundColor: colors.bg }}
         contentContainerStyle={[styles.list, { paddingTop: topPad }]}
+        data={visible}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
         refreshControl={
           <RefreshControl
             tintColor="#fff"
@@ -129,66 +164,25 @@ export default function ManualsScreen({ navigation }: Props) {
             }}
           />
         }
-      >
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Manuals</Text>
-              <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerText}>
+                <Text style={styles.title}>Manuals</Text>
+                <Text style={styles.subtitle}>Your latest documents and guides.</Text>
+              </View>
             </View>
+            <NotificationButton />
           </View>
-          <NotificationButton />
-        </View>
-
-        {visible.length === 0 ? (
+        }
+        ListEmptyComponent={
           <EmptyState
             icon="document-text-outline"
             title="No Manuals Available"
             message="All your manuals have been completed. Check back later for new content!"
           />
-        ) : (
-          visible.map((item, index) => {
-            const targetVersion = item.manual_version ?? 1;
-            const ackVersion = acks[item.id] ?? 0;
-            const completed = ackVersion >= targetVersion;
-            const notesStats = notesStatsMap[item.id];
-
-            return (
-              <React.Fragment key={item.id}>
-                <AnimatedCard
-                  index={index}
-                  item={item}
-                  completed={completed}
-                  completions={completionsMap[item.id] ?? []}
-                  notesStats={undefined}
-                  onPress={() => {
-                    requestAnimationFrame(() =>
-                      navigation.push('ManualDetail', { manualId: item.id, title: item.title })
-                    );
-                  }}
-                />
-                {/* Notes section fuori dalla card */}
-                {notesStats && notesStats.total > 0 && (
-                  <View style={styles.notesOutsideSection}>
-                    <View style={styles.notesOutsideBadge}>
-                      <Ionicons name="document-text-outline" size={14} color="#fff" />
-                      <Text style={styles.notesOutsideText}>
-                        {notesStats.total} {notesStats.total === 1 ? 'note' : 'notes'} from colleagues
-                      </Text>
-                      {notesStats.helpful_count > 0 && (
-                        <View style={styles.helpfulIndicator}>
-                          <Ionicons name="heart" size={10} color="#FF6B6B" />
-                          <Text style={styles.helpfulCount}>{notesStats.helpful_count}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                )}
-              </React.Fragment>
-            );
-          })
-        )}
-      </ScrollView>
+        }
+      />
     </Animated.View>
   );
 }
@@ -199,6 +193,7 @@ function AnimatedCard({
   completed, 
   completions, 
   notesStats,
+  scrollY,
   onPress
 }: {
   index: number;
@@ -206,10 +201,39 @@ function AnimatedCard({
   completed: boolean;
   completions: ManualCompletion[];
   notesStats?: { total: number; helpful_count: number };
+  scrollY: Animated.Value;
   onPress: () => void;
 }) {
   const scaleAnim = React.useRef(new Animated.Value(0.95)).current;
   const opacityAnim = React.useRef(new Animated.Value(0)).current;
+  const CARD_HEIGHT = 200;
+  const CARD_SPACING = spacing.lg;
+  const HEADER_HEIGHT = 100;
+  
+  const inputRange = [
+    -1,
+    0,
+    (CARD_HEIGHT + CARD_SPACING) * index + HEADER_HEIGHT,
+    (CARD_HEIGHT + CARD_SPACING) * (index + 1) + HEADER_HEIGHT,
+  ];
+
+  const imageTranslateY = scrollY.interpolate({
+    inputRange,
+    outputRange: [0, 0, -50, -100],
+    extrapolate: 'clamp',
+  });
+
+  const imageOpacity = scrollY.interpolate({
+    inputRange,
+    outputRange: [1, 1, 0.7, 0.3],
+    extrapolate: 'clamp',
+  });
+
+  const cardScale = scrollY.interpolate({
+    inputRange,
+    outputRange: [1, 1, 0.98, 0.96],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
     Animated.parallel([
@@ -235,48 +259,131 @@ function AnimatedCard({
         styles.card,
         {
           opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }],
+          transform: [{ scale: Animated.multiply(scaleAnim, cardScale) }],
         },
       ]}
     >
       <TouchableOpacity
-        activeOpacity={0.85}
+        activeOpacity={0.9}
         onPress={onPress}
         style={{ borderRadius: radius.xl }}
         accessibilityLabel={`Manual: ${item.title}`}
         accessibilityHint="Tap to view manual details"
       >
         <View style={styles.cardInner}>
-          {/* Cover in alto, full width */}
+          {/* Cover hero section con parallax effect */}
           <View style={styles.coverWrapFull}>
             {item.cover_url ? (
-              <Image source={{ uri: item.cover_url }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-            ) : null}
-            <LinearGradient
-              colors={['rgba(255,255,255,0.14)', 'rgba(255,255,255,0.04)']}
-              style={StyleSheet.absoluteFillObject}
-            />
-            {!item.cover_url ? (
-              <View style={styles.coverIcon}>
-                <Ionicons name="document-text-outline" size={26} color="rgba(255,255,255,0.75)" />
-              </View>
-            ) : null}
-          </View>
-
-          {/* Sezione completamenti sotto la cover, full width */}
-          <View style={styles.completionSection}>
-            <CompletionAvatarRow completions={completions} />
-          </View>
-
-          {/* Meta info (title, description, pills) sotto i completamenti */}
-          <View style={styles.meta}>
-            <View style={styles.rowTop}>
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
+              <>
+                <Animated.Image 
+                  source={{ uri: item.cover_url }} 
+                  style={[
+                    StyleSheet.absoluteFillObject,
+                    {
+                      transform: [{ translateY: imageTranslateY }],
+                      opacity: imageOpacity,
+                    }
+                  ]} 
+                  resizeMode="cover" 
+                />
+                {/* Overlay gradient più elegante */}
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)', 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              </>
+            ) : (
+              <LinearGradient
+                colors={['rgba(79, 255, 191, 0.15)', 'rgba(79, 140, 255, 0.1)', 'rgba(79, 255, 229, 0.05)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+            )}
+            
+            {/* Badge status in alto a destra */}
+            <View style={styles.coverBadge}>
+              {completed ? (
+                <LinearGradient
+                  colors={['#FFD700', '#FFA500']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statusBadgeGradient}
+                >
+                  <Ionicons name="trophy" size={16} color="#fff" />
+                </LinearGradient>
+              ) : (
+                <View style={styles.statusBadge}>
+                  <Ionicons name="book-outline" size={16} color={colors.fg} />
+                </View>
+              )}
             </View>
 
+            {/* Title overlay sulla cover */}
+            <View style={styles.coverTitleOverlay}>
+              <Text style={styles.coverTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
+            </View>
+
+            {!item.cover_url && (
+              <View style={styles.coverIcon}>
+                <Ionicons name="document-text-outline" size={32} color="rgba(255,255,255,0.8)" />
+              </View>
+            )}
+          </View>
+
+          {/* Statistiche integrate nella card */}
+          <View style={styles.statsSection}>
+            <View style={styles.statsRow}>
+              {/* Completions */}
+              <View style={styles.statItem}>
+                <View style={styles.statIconWrapper}>
+                  <Ionicons name="people-outline" size={16} color="#4FFFA4" />
+                </View>
+                <Text style={styles.statValue}>{completions.length}</Text>
+                <Text style={styles.statLabel}>Completed</Text>
+              </View>
+
+              {/* Notes stats se disponibili */}
+              {notesStats && notesStats.total > 0 && (
+                <View style={styles.statItem}>
+                  <View style={styles.statIconWrapper}>
+                    <Ionicons name="document-text-outline" size={16} color="#4F8CFF" />
+                  </View>
+                  <Text style={styles.statValue}>{notesStats.total}</Text>
+                  <Text style={styles.statLabel}>Notes</Text>
+                  {notesStats.helpful_count > 0 && (
+                    <View style={styles.helpfulBadge}>
+                      <Ionicons name="heart" size={10} color="#fff" />
+                      <Text style={styles.helpfulBadgeText}>{notesStats.helpful_count}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Version badge */}
+              <View style={styles.statItem}>
+                <View style={styles.statIconWrapper}>
+                  <Ionicons name="layers-outline" size={16} color="#FFC107" />
+                </View>
+                <Text style={styles.statValue}>v{item.manual_version || 1}</Text>
+                <Text style={styles.statLabel}>Version</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Sezione completamenti con design migliorato */}
+          {completions.length > 0 && (
+            <View style={styles.completionSection}>
+              <CompletionAvatarRow completions={completions} />
+            </View>
+          )}
+
+          {/* Meta info migliorata */}
+          <View style={styles.meta}>
             {item.description ? (
               <Text style={styles.desc} numberOfLines={2}>
                 {item.description}
@@ -285,21 +392,14 @@ function AnimatedCard({
 
             <View style={styles.rowBottom}>
               <View style={styles.tag}>
-                <Ionicons name="time-outline" size={14} color="rgba(232,238,247,0.85)" />
-                <Text style={styles.tagText}>Updated</Text>
+                <Ionicons name="time-outline" size={12} color="rgba(232,238,247,0.8)" />
+                <Text style={styles.tagText}>Recently updated</Text>
               </View>
 
-              {completed ? (
-                <View style={styles.completedPill}>
-                  <Ionicons name="trophy" size={14} color="#ffd369" />
-                  <Text style={styles.completedText}>Completed</Text>
-                </View>
-              ) : (
-                <View style={styles.readPill}>
-                  <Ionicons name="book-outline" size={14} color={colors.fg} />
-                  <Text style={styles.readText}>Read</Text>
-                </View>
-              )}
+              <View style={styles.actionIndicator}>
+                <Text style={styles.actionText}>View details</Text>
+                <Ionicons name="arrow-forward" size={14} color="#4FFFBF" />
+              </View>
             </View>
           </View>
         </View>
@@ -427,11 +527,51 @@ const styles = StyleSheet.create({
   cardInner: { flexDirection: 'column', alignItems: 'stretch' },
   coverWrapFull: {
     width: '100%',
-    height: 160,
+    height: 200,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderBottomWidth: 1,
-    borderColor: BORDER,
+    position: 'relative',
+  },
+  coverBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    zIndex: 10,
+  },
+  statusBadgeGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.ios,
+    ...shadow.android,
+  },
+  statusBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  coverTitleOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  coverTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   coverWrap: {
     width: 84,
@@ -444,9 +584,66 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
   },
   coverIcon: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  completionSection: {
+  statsSection: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderColor: BORDER,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  statItem: {
+    alignItems: 'center',
+    gap: 4,
+    position: 'relative',
+  },
+  statIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  statValue: {
+    color: colors.fg,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  statLabel: {
+    color: 'rgba(232,238,247,0.7)',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  helpfulBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    gap: 2,
+  },
+  helpfulBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  completionSection: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderColor: BORDER,
@@ -488,11 +685,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  meta: { flex: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 6 },
+  meta: { flex: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 8 },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { color: colors.fg, fontSize: 16, fontWeight: '700', flexShrink: 1, paddingRight: 6 },
-  desc: { color: 'rgba(232,238,247,0.75)' },
-  rowBottom: { marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  desc: { 
+    color: 'rgba(232,238,247,0.75)',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  rowBottom: { 
+    marginTop: 8,
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between' 
+  },
+  actionIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionText: {
+    color: '#4FFFBF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -500,11 +716,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
     borderColor: BORDER,
   },
-  tagText: { color: 'rgba(232,238,247,0.85)', fontSize: 12, fontWeight: '700' },
+  tagText: { color: 'rgba(232,238,247,0.9)', fontSize: 12, fontWeight: '700' },
   completedPill: {
     flexDirection: 'row',
     alignItems: 'center',

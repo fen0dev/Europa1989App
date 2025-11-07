@@ -23,6 +23,7 @@ export type ManualNote = {
     total_reactions: number;
     current_user_reacted_helpful: boolean;
     current_user_reacted: boolean;
+    is_reported?: boolean;
 };
 
 export type CreateNoteInput = {
@@ -130,7 +131,14 @@ export async function createManualNote(input: CreateNoteInput): Promise<ManualNo
         .select()
         .single();
 
-    if (error) throw handleApiError(error);
+    if (error) {
+        console.error('[createManualNote] Full error:', JSON.stringify(error, null, 2));
+        console.error('[createManualNote] Error message:', error.message);
+        console.error('[createManualNote] Error details:', error.details);
+        console.error('[createManualNote] Error hint:', error.hint);
+        throw handleApiError(error);
+    }
+
     // charge with stats from view
     return getNoteById(data.id);
 }
@@ -243,6 +251,43 @@ export async function toggleNoteReaction(
 
         if (error) throw handleApiError(error);
     }
+}
+
+/**
+ * hides/unhide a note (user can hide their own notes or public notes)
+*/
+export async function toggleNoteVisibility(noteId: string, hide: boolean): Promise<ManualNote> {
+    const  {data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) throw new Error('Unauthorized user');
+
+    // for normal users, they can only hide public notes or their own notes
+    const { data: note, error: noteError } = await supabase
+        .from('manual_notes')
+        .select('user_id, is_public')
+        .eq('id', noteId)
+        .single();
+
+    if (noteError || !note) throw handleApiError(noteError);
+
+    // if note is hidden then is_public = false (only if it ain't own note)
+    // if it's own note, then is_public = true
+    if (hide && note.user_id !== userId && !note.is_public) {
+        throw new Error('Note is already hidden');
+    }
+
+    const { data, error } = await supabase
+        .from('manual_notes')
+        .update({
+            is_public: !hide,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', noteId)
+        .select()
+        .single();
+
+    if (error) throw handleApiError(error);
+    return getNoteById(data.id);
 }
 
 /**

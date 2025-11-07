@@ -17,8 +17,8 @@ import {
   createQuestion,
   updateQuestion,
   deleteQuestion,
+  getManualQuestionsAdmin,
 } from '../../api/admin';
-import { getManualQuestions } from '../../api/quiz';
 import { colors, radius, spacing } from '../../theme/tokens';
 import type { AdminStackParamList } from '../../navigation/admin/AdminStack';
 import { useToast } from '../notification/toast/Toast';
@@ -37,15 +37,25 @@ export default function AdminQuestionsScreen({ route, navigation }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  const { data: questions, isLoading } = useQuery({
-    queryKey: ['manual-questions', manualId],
-    queryFn: () => getManualQuestions(manualId),
+  const { data: questions, isLoading, error } = useQuery({
+    queryKey: ['manual-questions-admin', manualId],
+    queryFn: async () => {
+      try {
+        const result = await getManualQuestionsAdmin(manualId);
+        console.log('[AdminQuestionsScreen] Questions loaded:', result?.length || 0);
+        return result;
+      } catch (err: any) {
+        console.error('[AdminQuestionsScreen] Error loading questions:', err);
+        toast.showToast(err.message || 'Error loading questions', 'error');
+        throw err;
+      }
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteQuestion,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manual-questions', manualId] });
+      queryClient.invalidateQueries({ queryKey: ['manual-questions-admin', manualId] });
       toast.showToast('Question deleted', 'success');
     },
     onError: (error: any) => {
@@ -72,6 +82,25 @@ export default function AdminQuestionsScreen({ route, navigation }: Props) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color="#fff" />
+        <Text style={styles.loadingText}>Loading questions...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Ionicons name="alert-circle" size={48} color="#FF6B6B" />
+        <Text style={styles.errorText}>Error loading questions</Text>
+        <Text style={styles.errorSubtext}>
+          {(error as any)?.message || 'Unknown error'}
+        </Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => queryClient.invalidateQueries({ queryKey: ['manual-questions-admin', manualId] })}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -125,7 +154,7 @@ export default function AdminQuestionsScreen({ route, navigation }: Props) {
           onClose={() => setShowAddForm(false)}
           onSuccess={() => {
             setShowAddForm(false);
-            queryClient.invalidateQueries({ queryKey: ['manual-questions', manualId] });
+            queryClient.invalidateQueries({ queryKey: ['manual-questions-admin', manualId] });
           }}
         />
       )}
@@ -134,114 +163,154 @@ export default function AdminQuestionsScreen({ route, navigation }: Props) {
 }
 
 function QuestionCard({
-  question,
-  index,
-  manualId,
-  onDelete,
-  onEdit,
-  isEditing,
-  onCancelEdit,
-}: {
-  question: any;
-  index: number;
-  manualId: string;
-  onDelete: () => void;
-  onEdit: () => void;
-  isEditing: boolean;
-  onCancelEdit: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-  const [questionText, setQuestionText] = useState(question.question);
-  const [optionA, setOptionA] = useState(question.option_a);
-  const [optionB, setOptionB] = useState(question.option_b);
-
-  const updateMutation = useMutation({
-    mutationFn: (updates: any) => updateQuestion(question.id, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manual-questions', manualId] });
-      toast.showToast('Question updated', 'success');
-      onCancelEdit();
-    },
-    onError: (error: any) => {
-      toast.showToast(error.message || 'Error updating', 'error');
-    },
-  });
-
-  const handleSave = () => {
-    updateMutation.mutate({
-      question: questionText,
-      option_a: optionA,
-      option_b: optionB,
+    question,
+    index,
+    manualId,
+    onDelete,
+    onEdit,
+    isEditing,
+    onCancelEdit,
+  }: {
+    question: any;
+    index: number;
+    manualId: string;
+    onDelete: () => void;
+    onEdit: () => void;
+    isEditing: boolean;
+    onCancelEdit: () => void;
+  }) {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+    const [questionText, setQuestionText] = useState(question.question);
+    const [optionA, setOptionA] = useState(question.option_a);
+    const [optionB, setOptionB] = useState(question.option_b);
+    const [correctAnswer, setCorrectAnswer] = useState<'A' | 'B'>(
+      question.correct_answer || 'A'
+    );
+  
+    const updateMutation = useMutation({
+      mutationFn: (updates: any) => updateQuestion(question.id, updates),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['manual-questions-admin', manualId] });
+        toast.showToast('Question updated', 'success');
+        onCancelEdit();
+      },
+      onError: (error: any) => {
+        toast.showToast(error.message || 'Error updating', 'error');
+      },
     });
-  };
+  
+    const handleSave = () => {
+      updateMutation.mutate({
+        question: questionText,
+        option_a: optionA,
+        option_b: optionB,
+        correct_answer: correctAnswer,
+      });
+    };
+  
+    if (isEditing) {
+      return (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardIndex}>#{index}</Text>
+            <View style={styles.cardActions}>
+              <TouchableOpacity onPress={handleSave} disabled={updateMutation.isPending}>
+                <Ionicons name="checkmark" size={24} color="#4FFFBF" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onCancelEdit}>
+                <Ionicons name="close" size={24} color="#FF6B6B" />
+              </TouchableOpacity>
+            </View>
+          </View>
+          <TextInput
+            style={styles.editInput}
+            value={questionText}
+            onChangeText={setQuestionText}
+            placeholder="Question"
+            placeholderTextColor="rgba(255,255,255,0.4)"
+            multiline
+          />
+          <TextInput
+            style={styles.editInput}
+            value={optionA}
+            onChangeText={setOptionA}
+            placeholder="Option A"
+            placeholderTextColor="rgba(255,255,255,0.4)"
+          />
+          <TextInput
+            style={styles.editInput}
+            value={optionB}
+            onChangeText={setOptionB}
+            placeholder="Option B"
+            placeholderTextColor="rgba(255,255,255,0.4)"
+          />
 
-  if (isEditing) {
+          <Text style={styles.label}>Correct Answer *</Text>
+          <View style={styles.radioGroup}>
+            <TouchableOpacity
+              style={[styles.radioOption, correctAnswer === 'A' && styles.radioOptionSelected]}
+              onPress={() => setCorrectAnswer('A')}
+            >
+              <Ionicons 
+                name={correctAnswer === 'A' ? 'radio-button-on' : 'radio-button-off'} 
+                size={20} 
+                color={correctAnswer === 'A' ? '#4FFFBF' : 'rgba(255,255,255,0.5)'} 
+              />
+              <Text style={[styles.radioLabel, correctAnswer === 'A' && styles.radioLabelSelected]}>
+                Option A
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.radioOption, correctAnswer === 'B' && styles.radioOptionSelected]}
+              onPress={() => setCorrectAnswer('B')}
+            >
+              <Ionicons 
+                name={correctAnswer === 'B' ? 'radio-button-on' : 'radio-button-off'} 
+                size={20} 
+                color={correctAnswer === 'B' ? '#4FFFBF' : 'rgba(255,255,255,0.5)'} 
+              />
+              <Text style={[styles.radioLabel, correctAnswer === 'B' && styles.radioLabelSelected]}>
+                Option B
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+  
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardIndex}>#{index}</Text>
           <View style={styles.cardActions}>
-            <TouchableOpacity onPress={handleSave} disabled={updateMutation.isPending}>
-              <Ionicons name="checkmark" size={24} color="#4FFFBF" />
+            <TouchableOpacity onPress={onEdit}>
+              <Ionicons name="create-outline" size={20} color="#4FFFBF" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={onCancelEdit}>
-              <Ionicons name="close" size={24} color="#FF6B6B" />
+            <TouchableOpacity onPress={onDelete}>
+              <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
             </TouchableOpacity>
           </View>
         </View>
-        <TextInput
-          style={styles.editInput}
-          value={questionText}
-          onChangeText={setQuestionText}
-          placeholder="Question"
-          placeholderTextColor="rgba(255,255,255,0.4)"
-          multiline
-        />
-        <TextInput
-          style={styles.editInput}
-          value={optionA}
-          onChangeText={setOptionA}
-          placeholder="Option A"
-          placeholderTextColor="rgba(255,255,255,0.4)"
-        />
-        <TextInput
-          style={styles.editInput}
-          value={optionB}
-          onChangeText={setOptionB}
-          placeholder="Option B"
-          placeholderTextColor="rgba(255,255,255,0.4)"
-        />
+        <Text style={styles.questionText}>{question.question}</Text>
+        <View style={styles.options}>
+          <View style={styles.option}>
+            <Text style={styles.optionLabel}>A:</Text>
+            <Text style={styles.optionText}>{question.option_a}</Text>
+            {question.correct_answer === 'A' && (
+              <Ionicons name="checkmark-circle" size={18} color="#4FFFBF" style={{ marginLeft: spacing.xs }} />
+            )}
+          </View>
+          <View style={styles.option}>
+            <Text style={styles.optionLabel}>B:</Text>
+            <Text style={styles.optionText}>{question.option_b}</Text>
+            {question.correct_answer === 'B' && (
+              <Ionicons name="checkmark-circle" size={18} color="#4FFFBF" style={{ marginLeft: spacing.xs }} />
+            )}
+          </View>
+        </View>
       </View>
     );
-  }
-
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardIndex}>#{index}</Text>
-        <View style={styles.cardActions}>
-          <TouchableOpacity onPress={onEdit}>
-            <Ionicons name="create-outline" size={20} color="#4FFFBF" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onDelete}>
-            <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
-          </TouchableOpacity>
-        </View>
-      </View>
-      <Text style={styles.questionText}>{question.question}</Text>
-      <View style={styles.options}>
-        <View style={styles.option}>
-          <Text style={styles.optionLabel}>A:</Text>
-          <Text style={styles.optionText}>{question.option_a}</Text>
-        </View>
-        <View style={styles.option}>
-          <Text style={styles.optionLabel}>B:</Text>
-          <Text style={styles.optionText}>{question.option_b}</Text>
-        </View>
-      </View>
-    </View>
-  );
 }
 
 function QuestionFormModal({
@@ -256,37 +325,52 @@ function QuestionFormModal({
   const [question, setQuestion] = useState('');
   const [optionA, setOptionA] = useState('');
   const [optionB, setOptionB] = useState('');
+  const [correctAnswer, setCorrectAnswer] = useState<'A' | 'B'>('A');
   const toast = useToast();
   const queryClient = useQueryClient();
 
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const topPad = Math.max(headerHeight, insets.top) + 15;
+
   const { data: questions } = useQuery({
-    queryKey: ['manual-questions', manualId],
-    queryFn: () => getManualQuestions(manualId),
+    queryKey: ['manual-questions-admin', manualId],
+    queryFn: () => getManualQuestionsAdmin(manualId),
   });
 
   const createMutation = useMutation({
     mutationFn: () => {
-      const nextIdx = questions ? Math.max(...questions.map(q => q.idx), 0) + 1 : 1;
+        const existingIdx = questions?.map(q => q.idx) || [];
+      const nextIdx = existingIdx.length > 0 ? Math.max(...existingIdx) + 1 : 1;
       return createQuestion({
         manual_id: manualId,
         idx: nextIdx,
         question,
         option_a: optionA,
         option_b: optionB,
+        correct_answer: correctAnswer,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manual-questions', manualId] });
+      queryClient.invalidateQueries({ queryKey: ['manual-questions-admin', manualId] });
       toast.showToast('Question created', 'success');
       onSuccess();
     },
     onError: (error: any) => {
       toast.showToast(error.message || 'Error creating', 'error');
+
+      if (error.code === '23505') {
+        toast.showToast('A question with this index already exists. Please try again.', 'error');
+        // Ricarica le domande per aggiornare l'indice
+        queryClient.invalidateQueries({ queryKey: ['manual-questions-admin', manualId] });
+      } else {
+        toast.showToast(error.message || 'Error creating question', 'error');
+      }
     },
   });
 
   return (
-    <View style={styles.modalOverlay}>
+    <View style={[styles.modalOverlay, { paddingTop: topPad }]}>
       <View style={styles.modal}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>New Question</Text>
@@ -320,6 +404,35 @@ function QuestionFormModal({
             placeholder="Second option"
             placeholderTextColor="rgba(255,255,255,0.4)"
           />
+          <Text style={styles.label}>Correct Answer *</Text>
+          <View style={[styles.radioGroup, { marginBottom: 40 }]}>
+            <TouchableOpacity
+                style={[styles.radioOption, correctAnswer === 'A' && styles.radioOptionSelected]}
+                onPress={() => setCorrectAnswer('A')}
+            >
+                <Ionicons 
+                name={correctAnswer === 'A' ? 'radio-button-on' : 'radio-button-off'} 
+                size={20} 
+                color={correctAnswer === 'A' ? '#4FFFBF' : 'rgba(255,255,255,0.5)'} 
+                />
+                <Text style={[styles.radioLabel, correctAnswer === 'A' && styles.radioLabelSelected]}>
+                Option A
+                </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={[styles.radioOption, correctAnswer === 'B' && styles.radioOptionSelected]}
+                onPress={() => setCorrectAnswer('B')}
+            >
+                <Ionicons 
+                name={correctAnswer === 'B' ? 'radio-button-on' : 'radio-button-off'} 
+                size={20} 
+                color={correctAnswer === 'B' ? '#4FFFBF' : 'rgba(255,255,255,0.5)'} 
+                />
+                <Text style={[styles.radioLabel, correctAnswer === 'B' && styles.radioLabelSelected]}>
+                Option B
+                </Text>
+            </TouchableOpacity>
+            </View>
         </ScrollView>
         <View style={styles.modalActions}>
           <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
@@ -512,7 +625,8 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
     gap: spacing.md,
@@ -543,5 +657,64 @@ const styles = StyleSheet.create({
     color: '#0b0f14',
     fontSize: 16,
     fontWeight: '700',
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    gap: spacing.sm,
+  },
+  radioOptionSelected: {
+    backgroundColor: 'rgba(79, 255, 191, 0.1)',
+    borderColor: '#4FFFBF',
+  },
+  radioLabel: {
+    fontSize: 14,
+    color: 'rgba(232,238,247,0.8)',
+    fontWeight: '500',
+  },
+  radioLabelSelected: {
+    color: '#4FFFBF',
+    fontWeight: '600',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+  },
+  errorText: {
+    marginTop: spacing.md,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FF6B6B',
+  },
+  errorSubtext: {
+    marginTop: spacing.sm,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    backgroundColor: '#4FFFBF',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+  },
+  retryButtonText: {
+    color: '#0b0f14',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

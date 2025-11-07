@@ -8,6 +8,7 @@ export type NotificationType =
     | 'streak_reminder'
     | 'achievement_unlocked'
     | 'team_challenge'
+    | 'note_reported'
 ;
 
 export interface NotificationData {
@@ -50,6 +51,7 @@ export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
     streak_reminder: 'flame',
     achievement_unlocked: 'trophy',
     team_challenge: 'flag',
+    note_reported: 'flag',
 };
 
 export const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -62,4 +64,5 @@ export const NOTIFICATION_COLORS: Record<NotificationType, string> = {
     streak_reminder: '#FF9800',
     achievement_unlocked: '#FFD700',
     team_challenge: '#E91E63',
+    note_reported: '#FF6B6B',
 };

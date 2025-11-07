@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, Modal, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, FlatList, Pressable, StyleSheet, Modal, TextInput, ScrollView, ActivityIndicator, Animated, PanResponder, Dimensions, Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { Animated } from 'react-native';
 import { colors, radius, spacing } from '../../theme/tokens';
 import { getManualNotes, createManualNote, NoteType, ManualNote } from '../../api/notes';
 import { NoteCard } from './NoteCard';
@@ -11,12 +10,17 @@ import { useToast } from '../../screens/notification/toast/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { logger, handleApiError } from '../../lib/errors';
+import { useAdmin } from '../../hooks/useAdmin';
+import { deleteNoteAdmin, reportNoteAdmin } from '../../api/admin';
+import { SwipeableNoteCard } from './SwipeableNoteCard';
+import { toggleNoteVisibility } from '../../api/notes';
+import { toggleNotePin } from '../../api/admin';
 
 type NoteListProps = {
-    manualId: string;
-    sectionId?: string;
-    articleId?: string;
-    onNotePress?: (note: ManualNote) => void;
+  manualId: string;
+  sectionId?: string;
+  articleId?: string;
+  onNotePress?: (note: ManualNote) => void;
 };
 
 const NOTE_TYPES: { type: NoteType, icon: string; label: string; color: string; }[] = [
@@ -26,6 +30,10 @@ const NOTE_TYPES: { type: NoteType, icon: string; label: string; color: string; 
     { type: 'clarify', icon: 'chatbubble-ellipses-outline', label: 'Clarify', color: '#2196F3' }, // Blue
 ];
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SHEET_HEIGHT = SCREEN_HEIGHT * 0.85;
+const DRAG_THRESHOLD = 100;
+
 export function NotesList({ manualId, sectionId, articleId, onNotePress }: NoteListProps) {
     const [showAddModal, setShowAddModal] = useState(false);
     const [noteContent, setNoteContent] = useState('');
@@ -34,6 +42,7 @@ export function NotesList({ manualId, sectionId, articleId, onNotePress }: NoteL
     const insets = useSafeAreaInsets();
     const toasts = useToast();
     const queryClient = useQueryClient();
+    const { isAdmin } = useAdmin();
 
     const { data: notes = [], isLoading, refetch } = useQuery({
         queryKey: ['manual-notes', manualId, sectionId, articleId],
@@ -64,6 +73,123 @@ export function NotesList({ manualId, sectionId, articleId, onNotePress }: NoteL
           logger.error('Failed to create note', err, { manualId, sectionId, articleId });
         },
     });
+
+    const deleteMutation = useMutation({
+        mutationFn: (noteId: string) => deleteNoteAdmin(noteId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: ['manual-notes', manualId, sectionId, articleId],
+                exact: true
+            });
+            toasts.showToast('Note deleted successfully', 'success');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+        onError: (err: any) => {
+            const appError = handleApiError(err);
+            toasts.showToast(appError.userMessage || 'Failed to delete note', 'error');
+            logger.error('Failed to delete note', err);
+        },
+    });
+
+    const pinMutation = useMutation({
+        mutationFn: (noteId: string) => toggleNotePin(noteId, !notes.find(n => n.id === noteId)?.is_pinned),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: ['manual-notes', manualId, sectionId, articleId],
+                exact: true
+            });
+            toasts.showToast('Note pinned', 'success');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+        onError: (err: any) => {
+            const appError = handleApiError(err);
+            toasts.showToast(appError.userMessage || 'Failed to pin note', 'error');
+        },
+    });
+
+    const hideMutation = useMutation({
+        mutationFn: (noteId: string) => {
+            const note = notes.find(n => n.id === noteId);
+            return toggleNoteVisibility(noteId, note?.is_public ?? true);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: ['manual-notes', manualId, sectionId, articleId],
+                exact: true
+            });
+            toasts.showToast('Note visibility updated', 'success');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+        onError: (err: any) => {
+            const appError = handleApiError(err);
+            toasts.showToast(appError.userMessage || 'Failed to update note', 'error');
+        },
+    });
+
+    const reportMutation = useMutation({
+        mutationFn: (noteId: string) => reportNoteAdmin(noteId, manualId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: ['manual-notes', manualId, sectionId, articleId],
+                exact: true
+            });
+            toasts.showToast('Note reported', 'success');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+        onError: (err: any) => {
+            const appError = handleApiError(err);
+            toasts.showToast(appError.userMessage || 'Failed to report note', 'error');
+        },
+    });
+
+    const handleDeleteNote = (noteId: string) => {
+        Alert.alert(
+            'Delete Note',
+            'Are you sure you want to delete this note? This action cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => deleteMutation.mutate(noteId),
+                },
+            ]
+        );
+    };
+
+    const handlePin = (noteId: string) => {
+      pinMutation.mutate(noteId);
+    };
+
+    const handleReport = (noteId: string) => {
+      Alert.alert(
+        'Report note',
+        'Are you sure you want to report this note? The author will be notified.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Report',
+            style: 'destructive',
+            onPress: () => reportMutation.mutate(noteId),
+          },
+        ]
+      );
+    };
+
+    const handleHide = (noteId: string) => {
+      const note = notes.find(n => n.id === noteId);
+      Alert.alert(
+        'Hide note',
+        `Sure you want to ${note?.is_public ? 'hide' : 'show'} this note?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: note?.is_public ? 'Hide' : 'Show',
+            onPress: () => hideMutation.mutate(noteId),
+          },
+        ]
+      );
+    };
 
     const handleAddNote = () => {
         if (noteContent.trim().length < 10) {
@@ -137,9 +263,14 @@ export function NotesList({ manualId, sectionId, articleId, onNotePress }: NoteL
                       data={notes}
                       keyExtractor={(item) => item.id}
                       renderItem={({ item }) => (
-                          <NoteCard
+                          <SwipeableNoteCard
                               note={item}
+                              manualId={manualId}
                               onPress={() => onNotePress?.(item)}
+                              onDelete={isAdmin ? () => handleDeleteNote(item.id) : undefined}
+                              onPin={() => handlePin(item.id)}
+                              onReport={isAdmin ? () => handleReport(item.id) : undefined}
+                              onHide={!isAdmin ? () => handleHide(item.id) : undefined}
                           />
                       )}
                       contentContainerStyle={styles.listContent}
@@ -187,131 +318,210 @@ function AddNoteModal({
     isSubmitting: boolean;
     insets: { top: number; bottom: number; };
 }) {
-    const slideAnim = React.useRef(new Animated.Value(500)).current;
-    const backdropAnim = React.useRef(new Animated.Value(0)).current;
+    const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+    const opacity = useRef(new Animated.Value(0)).current;
+    const pan = useRef(new Animated.ValueXY()).current;
 
-    React.useEffect(() => {
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                return Math.abs(gestureState.dy) > 5;
+            },
+            onPanResponderMove: (_, gestureState) => {
+                if (gestureState.dy > 0) {
+                    pan.setValue({ x: 0, y: gestureState.dy });
+                }
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dy > DRAG_THRESHOLD) {
+                    closeSheet();
+                } else {
+                    Animated.spring(pan, {
+                        toValue: { x: 0, y: 0 },
+                        useNativeDriver: true,
+                        tension: 50,
+                        friction: 8,
+                    }).start();
+                }
+            },
+        })
+    ).current;
+
+    useEffect(() => {
         if (visible) {
             Animated.parallel([
-              Animated.timing(backdropAnim, {
-                toValue: 1,
-                duration: 200,
-                useNativeDriver: true,
-              }),
-              Animated.spring(slideAnim, {
-                toValue: 0,
-                friction: 8,
-                tension: 65,
-                useNativeDriver: true,
-              }),
+                Animated.spring(translateY, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                    tension: 50,
+                    friction: 8,
+                }),
+                Animated.timing(opacity, {
+                    toValue: 1,
+                    duration: 200,
+                    useNativeDriver: true,
+                }),
             ]).start();
         } else {
             Animated.parallel([
-              Animated.timing(backdropAnim, {
-                toValue: 0,
-                duration: 150,
-                useNativeDriver: true,
-              }),
-              Animated.timing(slideAnim, {
-                toValue: 500,
-                duration: 200,
-                useNativeDriver: true,
-              }),
+                Animated.spring(translateY, {
+                    toValue: SHEET_HEIGHT,
+                    useNativeDriver: true,
+                    tension: 50,
+                    friction: 8,
+                }),
+                Animated.timing(opacity, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                }),
             ]).start();
+            pan.setValue({ x: 0, y: 0 });
         }
     }, [visible]);
+
+    const closeSheet = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        pan.setValue({ x: 0, y: 0 });
+        onClose();
+    };
 
     const charCount = noteContent.length;
     const isValid = charCount >= 10 && charCount <= 500;
 
+    const sheetStyle = {
+        transform: [
+            {
+                translateY: Animated.add(
+                    translateY,
+                    pan.y
+                ),
+            },
+        ],
+    };
+
     return (
-        <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-          <Animated.View style={[styles.modalBackdrop, { opacity: backdropAnim }]}>
-            <Pressable style={{ flex: 1 }} onPress={onClose} />
-            <Animated.View
-                style={[
-                    styles.modalSheet,
-                    {
-                    transform: [{ translateY: slideAnim }],
-                    paddingBottom: Math.max(insets.bottom, spacing.lg),
-                    },
-                ]}
-            >
-                <BlurView intensity={50} tint="dark" style={styles.modalContent}>
-                    {/* Header */}
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Add Note</Text>
-                        <Pressable onPress={onClose} disabled={isSubmitting}>
-                            <Ionicons name="close" size={24} color={colors.fg} />
-                        </Pressable>
-                    </View>
-    
-                {/* Tipo nota */}
-                <View style={styles.typeSelector}>
-                    {NOTE_TYPES.map((type) => (
-                        <Pressable
-                            key={type.type}
-                            onPress={() => onTypeChange(type.type)}
-                            style={[
-                                styles.typeOption,
-                                selectedType === type.type && [styles.typeOptionActive, { borderColor: type.color }],
-                            ]}
-                        >
-                            <Ionicons
-                                name={type.icon as any}
-                                size={18}
-                                color={selectedType === type.type ? type.color : 'rgba(255,255,255,0.6)'}
-                            />
-                            <Text
-                                style={[
-                                styles.typeOptionText,
-                                selectedType === type.type && { color: type.color },
-                                ]}
-                            >
-                                {type.label}
-                            </Text>
-                        </Pressable>
-                    ))}
-                </View>
-    
-                {/* Textarea */}
-                <TextInput
-                    style={styles.textInput}
-                    value={noteContent}
-                    onChangeText={onNoteContentChange}
-                    placeholder="Share a tip, ask a question, or add clarification..."
-                    placeholderTextColor="rgba(255,255,255,0.4)"
-                    multiline
-                    maxLength={500}
-                    textAlignVertical="top"
-                />
-    
-                {/* Char counter e submit */}
-                <View style={styles.modalFooter}>
-                  <Text style={[styles.charCount, !isValid && styles.charCountError]}>
-                    {charCount}/500
-                  </Text>
-                  <Pressable
-                    onPress={onSubmit}
-                    disabled={!isValid || isSubmitting}
+        <Modal 
+            visible={visible} 
+            transparent 
+            animationType="none" 
+            onRequestClose={closeSheet}
+            statusBarTranslucent
+        >
+            <View style={styles.modalContainer}>
+                {/* Backdrop */}
+                <Animated.View
                     style={[
-                      styles.submitBtn,
-                      (!isValid || isSubmitting) && styles.submitBtnDisabled,
+                        styles.modalBackdrop,
+                        {
+                            opacity,
+                        },
                     ]}
-                  >
-                    {isSubmitting ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark-outline" size={18} color="#fff" />
-                        <Text style={styles.submitBtnText}>Add Note</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              </BlurView>
-            </Animated.View>
-          </Animated.View>
+                >
+                    <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+                </Animated.View>
+
+                {/* Backdrop press handler */}
+                <Pressable
+                    style={styles.backdropPressable}
+                    onPress={closeSheet}
+                />
+
+                {/* Sheet */}
+                <Animated.View
+                    style={[
+                        styles.modalSheet,
+                        {
+                            height: SHEET_HEIGHT,
+                            paddingBottom: insets.bottom,
+                            ...sheetStyle,
+                        },
+                    ]}
+                    {...panResponder.panHandlers}
+                >
+                    <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+                    
+                    {/* Handle bar */}
+                    <View style={styles.handleContainer}>
+                        <View style={styles.handle} />
+                    </View>
+
+                    <View style={styles.modalContent}>
+                        {/* Header */}
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Add Note</Text>
+                            <Pressable onPress={closeSheet} disabled={isSubmitting}>
+                                <Ionicons name="close" size={24} color={colors.fg} />
+                            </Pressable>
+                        </View>
+            
+                        {/* Tipo nota */}
+                        <View style={styles.typeSelector}>
+                            {NOTE_TYPES.map((type) => (
+                                <Pressable
+                                    key={type.type}
+                                    onPress={() => onTypeChange(type.type)}
+                                    style={[
+                                        styles.typeOption,
+                                        selectedType === type.type && [styles.typeOptionActive, { borderColor: type.color }],
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name={type.icon as any}
+                                        size={18}
+                                        color={selectedType === type.type ? type.color : 'rgba(255,255,255,0.6)'}
+                                    />
+                                    <Text
+                                        style={[
+                                        styles.typeOptionText,
+                                        selectedType === type.type && { color: type.color },
+                                        ]}
+                                    >
+                                        {type.label}
+                                    </Text>
+                                </Pressable>
+                            ))}
+                        </View>
+            
+                        {/* Textarea */}
+                        <TextInput
+                            style={styles.textInput}
+                            value={noteContent}
+                            onChangeText={onNoteContentChange}
+                            placeholder="Share a tip, ask a question, or add clarification..."
+                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            multiline
+                            maxLength={500}
+                            textAlignVertical="top"
+                        />
+            
+                        {/* Char counter e submit */}
+                        <View style={styles.modalFooter}>
+                          <Text style={[styles.charCount, !isValid && styles.charCountError]}>
+                            {charCount}/500
+                          </Text>
+                          <Pressable
+                            onPress={onSubmit}
+                            disabled={!isValid || isSubmitting}
+                            style={[
+                              styles.submitBtn,
+                              (!isValid || isSubmitting) && styles.submitBtnDisabled,
+                            ]}
+                          >
+                            {isSubmitting ? (
+                              <ActivityIndicator color="#fff" />
+                            ) : (
+                              <>
+                                <Ionicons name="checkmark-outline" size={18} color="#fff" />
+                                <Text style={styles.submitBtnText}>Add Note</Text>
+                              </>
+                            )}
+                          </Pressable>
+                        </View>
+                    </View>
+                </Animated.View>
+            </View>
         </Modal>
     );
 }
@@ -414,20 +624,23 @@ function AddNoteModal({
       },
       modalBackdrop: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.87)',
         justifyContent: 'flex-end',
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
       },
       modalSheet: {
+        maxHeight: '90%',
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: colors.bg,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         overflow: 'hidden',
-        maxHeight: '90%',
       },
       modalContent: {
         padding: spacing.lg,
-        backgroundColor: 'rgba(255,255,255,0.06)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
       },
       modalHeader: {
         flexDirection: 'row',
@@ -508,5 +721,33 @@ function AddNoteModal({
         color: '#fff',
         fontSize: 14,
         fontWeight: '700',
+      },
+      modalContainer: {
+        flex: 1,
+      },
+      backdropPressable: {
+        ...StyleSheet.absoluteFillObject,
+      },
+      handleContainer: {
+        alignItems: 'center',
+        paddingVertical: spacing.sm,
+      },
+      handle: {
+        width: 36,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255,255,255,0.3)',
+      },
+      cardReported: {
+        borderColor: 'rgba(255, 107, 107, 0.4)',
+        backgroundColor: 'rgba(255, 107, 107, 0.08)',
+      },
+      adminActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+      },
+      adminActionBtn: {
+        padding: spacing.xs,
       },
 });

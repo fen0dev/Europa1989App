@@ -58,6 +58,7 @@ export type CreateQuestionInput = {
     question: string;
     option_a: string;
     option_b: string;
+    correct_answer: 'A' | 'B';
 };
 
 export type UpdateQuestionInput = {
@@ -65,6 +66,7 @@ export type UpdateQuestionInput = {
     question?: string;
     option_a?: string;
     option_b?: string;
+    correct_answer?: 'A' | 'B';
 };
 
 export type ManualAdminStats = {
@@ -84,8 +86,8 @@ export async function isUserAdmin(): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
         adminCheckCache = null;
-        return false
-    };
+        return false;
+    }
 
     if (adminCheckCache &&
         adminCheckCache.userId === user.id &&
@@ -322,10 +324,27 @@ export async function uploadManualCover(): Promise<string> {
             upsert: false,
         });
 
-    if (error) throw handleApiError(error);
+    if (error) {
+        // clearer error messages
+        if (error.message?.includes('bucket')) {
+            throw new Error('Storage bucket error. Please check bucket configuration in Supabase.');
+        }
+        if (error.message?.includes('permission') || error.message?.includes('policy')) {
+            throw new Error('Permission denied. Please check storage policies for admin users.');
+        }
+        throw handleApiError(error);
+    }
 
-    const { data: { publicUrl } } = supabase.storage.from('manuals').getPublicUrl(data.path);
-    return publicUrl;
+    if (!data?.path) {
+        throw new Error('Upload succeeded but no path returned');
+    }
+
+    const { data: urlData } = supabase.storage.from('manuals').getPublicUrl(data.path);
+    if (!urlData?.publicUrl) {
+        throw new Error('Failed to generate public URL');
+    }
+    
+    return urlData.publicUrl;
 }
 
 /**
@@ -360,11 +379,21 @@ export async function uploadManualPDF(): Promise<string> {
             upsert: false,
         });
 
-    if (error) throw handleApiError(error);
+    if (error) {
+        if (error.message?.includes('bucket')) {
+            throw new Error('Storage bucket error. Please check bucket configuration in Supabase.');
+        }
+        if (error.message?.includes('permission') || error.message?.includes('policy')) {
+            throw new Error('Permission denied. Please check storage policies for admin users.');
+        }
+        throw handleApiError(error);
+    }
 
-    const pdfPath = data.path;
+    if (!data?.path) {
+        throw new Error('Upload succeeded but no path returned');
+    }
 
-    return pdfPath;     // returns path but NOT public url
+    return data.path;
 }
 
 // MANUALS ADMIN API
@@ -640,6 +669,10 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Manual
     validateOptionText(input.option_b);
     validateOrderIndex(input.idx);
 
+    if (input.correct_answer !== 'A' && input.correct_answer !== 'B') {
+        throw new Error('Correct answer must be either A or B');
+    }
+
     const { data, error } = await supabase
         .from('manual_questions')
         .insert({
@@ -648,11 +681,18 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Manual
             question: input.question,
             option_a: input.option_a,
             option_b: input.option_b,
+            correct_answer: input.correct_answer,
+            correct_option: input.correct_answer,
         })
         .select()
         .single();
         
-    if (error) throw handleApiError(error);
+    if (error) {
+        console.error('[createQuestion] Error:', error);
+        console.error('[createQuestion] Input:', input);
+        throw handleApiError(error);
+    }
+
     return data as ManualQuestion;
 }
 
@@ -669,10 +709,18 @@ export async function updateQuestion(
     if (updates.option_a !== undefined) validateOptionText(updates.option_a);
     if (updates.option_b !== undefined) validateOptionText(updates.option_b);
     if (updates.idx !== undefined) validateOrderIndex(updates.idx);
+    if (updates.correct_answer !== undefined && updates.correct_answer !== 'A' && updates.correct_answer !== 'B') {
+        throw new Error('Correct answer must be either A or B');
+    }
+
+    const updateData: any = { ...updates };
+    if (updates.correct_answer !== undefined) {
+        updateData.correct_option = updates.correct_answer;
+    }
 
     const { data, error } = await supabase
         .from('manual_questions')
-        .update(updates)
+        .update(updateData)
         .eq('id', questionId)
         .select()
         .single();
@@ -693,6 +741,19 @@ export async function deleteQuestion(questionId: string): Promise<void> {
         .eq('id', questionId);
 
     if (error) throw handleApiError(error);
+}
+
+export async function getManualQuestionsAdmin(manualId: string): Promise<ManualQuestion[]> {
+    if (!(await isUserAdmin())) throw new Error('Unauthorized access - Admin access required!');
+
+    const { data, error } = await supabase
+        .from('manual_questions')
+        .select('id,manual_id,idx,question,option_a,option_b,correct_answer')
+        .eq('manual_id', manualId)
+        .order('idx', { ascending: true });
+
+    if (error) throw handleApiError(error);
+    return (data ?? []) as ManualQuestion[];
 }
 
 // NOTES MODERATION API
@@ -739,4 +800,52 @@ export async function deleteNoteAdmin(noteId: string): Promise<void> {
         .eq('id', noteId);
 
     if (error) throw handleApiError(error);
+}
+
+/**
+ * reports a note (admin only) and sends a notification to the user
+*/
+export async function reportNoteAdmin(noteId: string, manualId: string): Promise<void> {
+    if (!(await isUserAdmin())) throw new Error('Unauthorized access - Admin access required!');
+
+    // first: get note details and user who created it
+    const { data: note, error: noteError } = await supabase
+        .from('manual_notes')
+        .select('user_id, content')
+        .eq('id', noteId)
+        .single();
+
+    if (noteError || !note) {
+        throw new Error('Note not found');
+    }
+
+    // report note (add to report table)
+    const { error: updateError } = await supabase
+        .from('manual_notes')
+        .update({ 
+            is_reported: true,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', noteId);
+
+    if (updateError) throw handleApiError(updateError);
+
+    const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+            user_id: note.user_id,
+            type: 'note_reported',
+            title: 'Note Reported',
+            body: 'Your note has been reported by an admin.',
+            data: {
+                noteId: noteId,
+                manualId: manualId,
+            },
+            read: false,
+        });
+
+    if (notificationError) {
+        console.error('[reportNoteAdmin] Error creating notification:', notificationError);
+        throw handleApiError(notificationError);
+    }
 }

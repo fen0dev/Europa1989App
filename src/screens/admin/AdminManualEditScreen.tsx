@@ -101,6 +101,8 @@ export default function AdminManualEditScreen({ route, navigation }: Props) {
     mutationFn: uploadManualCover,
     onSuccess: (url) => {
       setCoverUrl(url);
+      queryClient.invalidateQueries({ queryKey: ['manual', manualId] });
+      queryClient.invalidateQueries({ queryKey: ['admin-manuals'] });
       toast.showToast('Cover uploaded successfully', 'success');
     },
     onError: (error: any) => {
@@ -126,21 +128,22 @@ export default function AdminManualEditScreen({ route, navigation }: Props) {
           title,
           description,
           published,
-          cover_url: coverUrl,
-          pdf_path: pdfPath,
+          cover_url: coverUrl || null,
+          pdf_path: pdfPath || null,
         });
       } else {
         return createManual({
           title,
           description,
           published,
-          cover_url: coverUrl ?? undefined,
-          pdf_path: pdfPath ?? undefined,
+          cover_url: coverUrl || undefined,
+          pdf_path: pdfPath || undefined,
         });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-manuals'] });
+      queryClient.invalidateQueries({ queryKey: ['manual', manualId] });
       toast.showToast(
         manualId ? 'Manual updated' : 'Manual created',
         'success'
@@ -279,15 +282,57 @@ export default function AdminManualEditScreen({ route, navigation }: Props) {
               <Text style={styles.statValue}>{stats.total_articles}</Text>
               <Text style={styles.statLabel}>Articles</Text>
             </View>
-            <View style={styles.statCard}>
+            <TouchableOpacity 
+              style={styles.statCard}
+              onPress={() => navigation.navigate('AdminQuestions', { manualId: manualId! })}
+            >
               <Text style={styles.statValue}>{stats.total_questions}</Text>
               <Text style={styles.statLabel}>Questions</Text>
-            </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(79, 255, 191, 0.5)" style={{ marginTop: 4 }} />
+            </TouchableOpacity>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.total_completions}</Text>
               <Text style={styles.statLabel}>Completions</Text>
             </View>
           </View>
+        </View>
+      )}
+
+      {manualId && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Management Actions</Text>
+          
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('AdminQuestions', { manualId: manualId! })}
+          >
+            <View style={styles.actionButtonIcon}>
+              <Ionicons name="help-circle-outline" size={24} color="#4FFFBF" />
+            </View>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonTitle}>Quiz Questions</Text>
+              <Text style={styles.actionButtonSubtitle}>
+                Create and manage quiz questions for this manual
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('AdminNotesModeration', { manualId: manualId! })}
+          >
+            <View style={styles.actionButtonIcon}>
+              <Ionicons name="document-text-outline" size={24} color="#4FFFBF" />
+            </View>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonTitle}>Notes Moderation</Text>
+              <Text style={styles.actionButtonSubtitle}>
+                Moderate user notes and comments
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -477,6 +522,38 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
+    color: 'rgba(232,238,247,0.6)',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  actionButtonIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(79, 255, 191, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  actionButtonContent: {
+    flex: 1,
+  },
+  actionButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.fg,
+    marginBottom: 4,
+  },
+  actionButtonSubtitle: {
+    fontSize: 13,
     color: 'rgba(232,238,247,0.6)',
   },
   versionButton: {

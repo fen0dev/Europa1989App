@@ -7,12 +7,13 @@ export type ManualQuestion = {
     question: string;
     option_a: string;
     option_b: string;
+    correct_answer: 'A' | 'B';
 };
 
 export async function getManualQuestions(manualId: string): Promise<ManualQuestion[]> {
     const { data, error } = await supabase
       .from('manual_questions')
-      .select('id,manual_id,idx,question,option_a,option_b')
+      .select('id,manual_id,idx,question,option_a,option_b,correct_answer')
       .eq('manual_id', manualId)
       .order('idx', { ascending: true });
     

@@ -5,6 +5,7 @@ import { ActivityIndicator, View, StatusBar } from 'react-native';
 import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import RootTabs from './src/navigation/tabs/RootTabs';
 import AuthNavigator from './src/navigation/auth/AuthNavigator';
 import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
@@ -106,32 +107,38 @@ export default function App() {
 
   if (appState === 'loading') {
     return (
-      <SafeAreaProvider>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0b0f14' }}>
-          <ActivityIndicator color="#fff" />
-        </View>
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0b0f14' }}>
+            <ActivityIndicator color="#fff" />
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     );
   }
 
   if (appState === 'onboarding') {
     return (
-      <SafeAreaProvider>
-        <OnboardingScreen onComplete={handleOnboardingComplete} />
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <OnboardingScreen onComplete={handleOnboardingComplete} />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <NavigationContainer linking={linking} theme={theme}>
-            {appState === 'authenticated' ? <AuthenticatedApp /> : <AuthNavigator />}
-          </NavigationContainer>
-          <StatusBar barStyle="light-content" />
-        </ToastProvider>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            <NavigationContainer linking={linking} theme={theme}>
+              {appState === 'authenticated' ? <AuthenticatedApp /> : <AuthNavigator />}
+            </NavigationContainer>
+            <StatusBar barStyle="light-content" />
+          </ToastProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

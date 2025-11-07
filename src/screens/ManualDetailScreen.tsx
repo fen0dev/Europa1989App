@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Pressable, Modal, Animated, ScrollView, PanResponder, Dimensions } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, Pressable, Modal, Animated, ScrollView, PanResponder, Dimensions, Image } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSections, getManual, getManualAck, type Section } from '../api/manuals';
 import { getManualQuestions, submitAllAnswers, rpcAckManual } from '../api/quiz';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
-import { colors, radius, spacing } from '../theme/tokens';
+import { colors, radius, spacing, shadow } from '../theme/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
@@ -213,40 +213,82 @@ export default function ManualDetailScreen({ route, navigation }: Props) {
   };
 
   const renderHeader = () => (
-    <View style={[styles.header, { marginTop: topPad }]}>
-      <LinearGradient
-        colors={['rgba(79, 255, 164, 0.75)', 'rgba(79, 255, 208, 0.25)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.badge}
-      >
-        <Ionicons name="document-text-outline" size={24} color="#fff" />
-      </LinearGradient>
-
-      <Text style={styles.title}>{manual.title}</Text>
-      {manual.description ? <Text style={styles.desc}>{manual.description}</Text> : null}
-
-      <View style={styles.ctaRow}>
-        {pdfUrl ? (
-          <Pressable
-            onPress={() => navigation.navigate('PDF', { manualId, pdfUrl, title: manual.title })}
-            style={styles.primaryBtn}
-            accessibilityLabel="Open PDF"
-          >
-            <Ionicons name="open-outline" size={18} color="#fff" />
-            <Text style={styles.primaryText}>Open PDF</Text>
-          </Pressable>
-        ) : null}
-
-        <Pressable
-          onPress={() => setShowQuiz(true)}
-          disabled={isPending || acked}
-          style={[styles.ghostBtn, acked && { opacity: 0.5 }]}
-          accessibilityLabel={acked ? 'Manual completed' : 'Mark as completed'}
+    <View style={[styles.headerContainer, { marginTop: topPad }]}>
+      {/* Hero section con cover */}
+      {manual.cover_url ? (
+        <View style={styles.heroSection}>
+          <Image source={{ uri: manual.cover_url }} style={styles.heroImage} resizeMode="cover" />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          {/* Status badge */}
+          <View style={styles.heroBadge}>
+            {acked ? (
+              <LinearGradient
+                colors={['#FFD700', '#FFA500']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroStatusGradient}
+              >
+                <Ionicons name="trophy" size={18} color="#fff" />
+              </LinearGradient>
+            ) : (
+              <View style={styles.heroStatusBadge}>
+                <Ionicons name="book-outline" size={18} color={colors.fg} />
+              </View>
+            )}
+          </View>
+        </View>
+      ) : (
+        <LinearGradient
+          colors={['rgba(79, 255, 191, 0.2)', 'rgba(79, 140, 255, 0.15)', 'rgba(79, 255, 229, 0.1)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroGradient}
         >
-          <Ionicons name={acked ? 'checkmark-done-outline' : 'sparkles-outline'} size={18} color={colors.fg} />
-          <Text style={styles.ghostText}>{acked ? 'Completed' : 'Mark as completed'}</Text>
-        </Pressable>
+          <View style={styles.heroIcon}>
+            <Ionicons name="document-text-outline" size={48} color="rgba(255,255,255,0.8)" />
+          </View>
+        </LinearGradient>
+      )}
+
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>{manual.title}</Text>
+            {manual.description ? (
+              <Text style={styles.desc} numberOfLines={2}>
+                {manual.description}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.ctaRow}>
+          {pdfUrl ? (
+            <Pressable
+              onPress={() => navigation.navigate('PDF', { manualId, pdfUrl, title: manual.title })}
+              style={styles.primaryBtn}
+              accessibilityLabel="Open PDF"
+            >
+              <Ionicons name="open-outline" size={18} color="#fff" />
+              <Text style={styles.primaryText}>Open PDF</Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            onPress={() => setShowQuiz(true)}
+            disabled={isPending || acked}
+            style={[styles.ghostBtn, acked && { opacity: 0.5 }]}
+            accessibilityLabel={acked ? 'Manual completed' : 'Mark as completed'}
+          >
+            <Ionicons name={acked ? 'checkmark-done-outline' : 'sparkles-outline'} size={18} color={colors.fg} />
+            <Text style={styles.ghostText}>{acked ? 'Completed' : 'Mark as completed'}</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -427,7 +469,72 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     paddingTop: spacing.xl * 2,
   },
-  header: { paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, gap: 12 },
+  headerContainer: {
+    marginBottom: spacing.md,
+  },
+  heroSection: {
+    height: 220,
+    width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.xl,
+    zIndex: 10,
+  },
+  heroStatusGradient: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.ios,
+    ...shadow.android,
+  },
+  heroStatusBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  heroGradient: {
+    height: 220,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  header: { 
+    paddingHorizontal: spacing.xl, 
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: 16,
+  },
+  headerTop: {
+    gap: 8,
+  },
+  headerText: {
+    gap: 6,
+  },
   badge: {
     width: 48,
     height: 48,
@@ -436,9 +543,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.xs,
   },
-  title: { color: colors.fg, fontSize: 26, fontWeight: '800', marginBottom: 4 },
-  desc: { color: 'rgba(232,238,247,0.75)', fontSize: 15, lineHeight: 22 },
-  ctaRow: { flexDirection: 'row', gap: 10, marginTop: spacing.sm, flexWrap: 'wrap' },
+  title: { 
+    color: colors.fg, 
+    fontSize: 28, 
+    fontWeight: '800', 
+    lineHeight: 34,
+  },
+  desc: { 
+    color: 'rgba(232,238,247,0.75)', 
+    fontSize: 15, 
+    lineHeight: 22,
+  },
+  ctaRow: { 
+    flexDirection: 'row', 
+    gap: 12, 
+    marginTop: spacing.sm, 
+    flexWrap: 'wrap' 
+  },
   primaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,7 +569,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  primaryText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  primaryText: { 
+    color: '#fff', 
+    fontWeight: '700', 
+    fontSize: 15 
+  },
   ghostBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -460,7 +585,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  ghostText: { color: colors.fg, fontWeight: '700', fontSize: 15 },
+  ghostText: { 
+    color: colors.fg, 
+    fontWeight: '700', 
+    fontSize: 15 
+  },
   list: { paddingBottom: spacing.xl },
   row: {
     paddingVertical: 16,

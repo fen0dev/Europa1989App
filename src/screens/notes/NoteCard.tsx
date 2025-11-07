@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'react-native';
@@ -10,12 +10,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toggleNoteReaction } from '../../api/notes';
 import * as Haptics from 'expo-haptics';
 import { logger, handleApiError } from '../../lib/errors';
+import { useAdmin } from '../../hooks/useAdmin';
+import { deleteNoteAdmin, reportNoteAdmin } from '../../api/admin';
 
 type NoteCardProps = {
     note: ManualNote;
     onPress?: () => void;
     onDelete?: () => void;
     showDelete?: boolean;
+    manualId: string;
 };
 
 const NOTE_TYPE_CONFIG: Record<NoteType, { icon: string; color: string; label: string; }> = {
@@ -25,9 +28,10 @@ const NOTE_TYPE_CONFIG: Record<NoteType, { icon: string; color: string; label: s
     clarify: { icon: 'chatbubble-ellipses-outline', color: '#2196F3', label: 'Clarify' },
 };
 
-export function NoteCard({ note, onPress, onDelete, showDelete = false }: NoteCardProps) {
+export function NoteCard({ note, onPress, onDelete, showDelete = false, manualId }: NoteCardProps) {
     const toast = useToast();
     const queryClient = useQueryClient();
+    const { isAdmin } = useAdmin();
 
     const config = NOTE_TYPE_CONFIG[note.note_type];
 
@@ -44,6 +48,35 @@ export function NoteCard({ note, onPress, onDelete, showDelete = false }: NoteCa
         },
     });
 
+    const { mutate: handleReport } = useMutation({
+        mutationFn: () => reportNoteAdmin(note.id, manualId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['manual-notes', note.manual_id] });
+            toast.showToast('Note reported successfully', 'success');
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        },
+        onError: (err: any) => {
+            const appError = handleApiError(err);
+            toast.showToast(appError.userMessage || 'Failed to report note', 'error');
+            logger.error('Failed to report note', err, { noteId: note.id });
+        },
+    });
+
+    const handleReportPress = () => {
+        Alert.alert(
+            'Report Note',
+            'Are you sure you want to report this note? The author will be notified.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Report',
+                    style: 'destructive',
+                    onPress: () => handleReport(),
+                },
+            ]
+        );
+    };
+
     const authorName = note.nickname || note.display_name || 'Unknown';
     const avatarUrl = note.avatar_url || undefined;
 
@@ -53,6 +86,7 @@ export function NoteCard({ note, onPress, onDelete, showDelete = false }: NoteCa
             style={({ pressed }) => [
                 styles.card,
                 note.is_pinned && styles.cardPinned,
+                note.is_reported && styles.cardReported, 
                 pressed && { opacity: 0.95 },
             ]}
             accessibilityLabel={`Note: ${note.content.substring(0, 50)}...`}
@@ -75,7 +109,39 @@ export function NoteCard({ note, onPress, onDelete, showDelete = false }: NoteCa
                         <Ionicons name="pin" size={14} color="rgba(255,255,255,0.6)" />
                     )}
 
-                    {showDelete && (
+                    {note.is_reported && (
+                        <Ionicons name="flag" size={14} color="#FF6B6B" />
+                    )}
+
+                    {/* AGGIUNGI: Azioni admin */}
+                    {isAdmin && (
+                        <View style={styles.adminActions}>
+                            {!note.is_reported && (
+                                <Pressable
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        handleReportPress();
+                                    }}
+                                    style={styles.adminActionBtn}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons name="flag-outline" size={16} color="#FFC107" />
+                                </Pressable>
+                            )}
+                            <Pressable
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onDelete?.();
+                                }}
+                                style={styles.adminActionBtn}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Ionicons name="trash-outline" size={16} color={colors.error} />
+                            </Pressable>
+                        </View>
+                    )}
+
+                    {showDelete && !isAdmin && (  // Mostra solo se non è admin (per utenti normali)
                         <Pressable
                             onPress={(e) => {
                                 e.stopPropagation();
@@ -163,6 +229,10 @@ const styles = StyleSheet.create({
   cardPinned: {
     borderColor: 'rgba(255, 193, 7, 0.4)',
     backgroundColor: 'rgba(255, 193, 7, 0.08)',
+  },
+  cardReported: {
+    borderColor: 'rgba(255, 107, 107, 0.4)',
+    backgroundColor: 'rgba(255, 107, 107, 0.08)',
   },
   cardInner: {
     padding: spacing.md,
@@ -255,5 +325,13 @@ const styles = StyleSheet.create({
     color: colors.fg,
     fontSize: 12,
     fontWeight: '600',
+  },
+  adminActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  adminActionBtn: {
+    padding: spacing.xs,
   },
 });

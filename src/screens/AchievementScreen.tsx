@@ -10,7 +10,10 @@ import {
   RefreshControl,
   Pressable,
   Animated,
+  Image,
 } from 'react-native';
+
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Achievement>);
 import { useQuery } from '@tanstack/react-query';
 import { getAchievements, type Achievement } from '../api/achievements';
 import { colors, radius, spacing, shadow } from '../theme/tokens';
@@ -54,6 +57,8 @@ export default function AchievementScreen() {
     staleTime: 30_000,
   });
 
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   if (isLoading) {
     return (
       <FlatList
@@ -91,11 +96,16 @@ export default function AchievementScreen() {
   const achievements = (data ?? []) as Achievement[];
 
   return (
-    <FlatList
+    <AnimatedFlatList
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={[styles.list, { paddingTop: topPad }]}
       data={achievements}
       keyExtractor={(a) => a.manual.id}
+      scrollEventThrottle={16}
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: true }
+      )}
       refreshControl={
         <RefreshControl
           tintColor="#fff"
@@ -126,6 +136,7 @@ export default function AchievementScreen() {
           item={item}
           index={index}
           navigation={navigation}
+          scrollY={scrollY}
         />
       )}
     />
@@ -173,67 +184,118 @@ const styles = StyleSheet.create({
     ...shadow.android,
   },
   cardInner: { 
-    flexDirection: 'row',
-    padding: spacing.md,
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
-  cover: { 
-    width: 84, 
-    height: 84, 
-    borderRadius: radius.xl, 
+  coverWrapFull: {
+    width: '100%',
+    height: 200,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.04)',
+    position: 'relative',
+  },
+  trophyBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    zIndex: 10,
+  },
+  trophyGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.ios,
+    ...shadow.android,
+  },
+  coverTitleOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  coverTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  coverIcon: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achievementInfo: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    gap: 12,
+  },
+  achievementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(79, 255, 164, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(79, 255, 164, 0.3)',
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  completedText: {
+    color: '#4FFFA4',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  whenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
     borderColor: BORDER,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm - 8,
+    paddingVertical: 6,
   },
-  overlay: { flex: 1, borderRadius: radius.xl },
-  meta: { 
-    flex: 1, 
-    paddingLeft: spacing.md, 
-    paddingVertical: spacing.xs,
-    justifyContent: 'space-between',
-  },
-  cardTitle: { 
-    color: colors.fg, 
-    fontSize: 16, 
-    fontWeight: '700', 
-    marginBottom: spacing.xs,
+  when: { 
+    color: 'rgba(232,238,247,0.85)', 
+    fontSize: 12,
+    fontWeight: '600',
   },
   desc: { 
     color: 'rgba(232,238,247,0.75)',
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: spacing.sm,
-  },
-  footerColumn: { 
-    gap: spacing.sm,
-  },
-  whenRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: spacing.xs,
-  },
-  when: { 
-    color: 'rgba(232,238,247,0.65)', 
-    fontSize: 12,
   },
   reviewBtn: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    marginTop: spacing.xs,
+  },
+  reviewBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignSelf: 'flex-start',
   },
   reviewText: { 
     color: colors.fg, 
-    fontWeight: '600', 
-    fontSize: 13,
+    fontWeight: '700', 
+    fontSize: 14,
   },
   completionPlaceholder: {
     marginTop: 0,
@@ -332,14 +394,44 @@ const styles = StyleSheet.create({
   },
 });
 
-function AnimatedAchievementCard({ item, index, navigation }: {
+function AnimatedAchievementCard({ item, index, navigation, scrollY }: {
   item: Achievement;
   index: number;
   navigation: any;
+  scrollY: Animated.Value;
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  
+  const CARD_HEIGHT = 200;
+  const CARD_SPACING = spacing.lg;
+  const HEADER_HEIGHT = 100;
+  
+  const inputRange = [
+    -1,
+    0,
+    (CARD_HEIGHT + CARD_SPACING) * index + HEADER_HEIGHT,
+    (CARD_HEIGHT + CARD_SPACING) * (index + 1) + HEADER_HEIGHT,
+  ];
+
+  const imageTranslateY = scrollY.interpolate({
+    inputRange,
+    outputRange: [0, 0, -50, -100],
+    extrapolate: 'clamp',
+  });
+
+  const imageOpacity = scrollY.interpolate({
+    inputRange,
+    outputRange: [1, 1, 0.7, 0.3],
+    extrapolate: 'clamp',
+  });
+
+  const cardScale = scrollY.interpolate({
+    inputRange,
+    outputRange: [1, 1, 0.98, 0.96],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
     Animated.parallel([
@@ -375,7 +467,7 @@ function AnimatedAchievementCard({ item, index, navigation }: {
           opacity: fadeAnim,
           transform: [
             { translateY: slideAnim },
-            { scale: scaleAnim },
+            { scale: Animated.multiply(scaleAnim, cardScale) },
           ],
         },
       ]}
@@ -388,39 +480,87 @@ function AnimatedAchievementCard({ item, index, navigation }: {
             params: { manualId: item.manual.id, title: item.manual.title },
           })
         }
-        style={styles.cardInner}
+        style={{ borderRadius: radius.xl }}
         accessibilityLabel={`Completed manual: ${item.manual.title}`}
         accessibilityHint="Tap to review this completed manual"
       >
-        {cover ? (
-          <ImageBackground
-            source={{ uri: cover }}
-            style={styles.cover}
-            resizeMode="cover"
-            imageStyle={{ borderRadius: radius.xl }}
-          />
-        ) : (
-          <View style={styles.cover} />
-        )}
+        <View style={styles.cardInner}>
+          {/* Hero section con parallax effect */}
+          <View style={styles.coverWrapFull}>
+            {cover ? (
+              <>
+                <Animated.Image
+                  source={{ uri: cover }}
+                  style={[
+                    StyleSheet.absoluteFillObject,
+                    {
+                      transform: [{ translateY: imageTranslateY }],
+                      opacity: imageOpacity,
+                    }
+                  ]}
+                  resizeMode="cover"
+                />
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.2)', 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              </>
+            ) : (
+              <LinearGradient
+                colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 165, 0, 0.15)', 'rgba(255, 215, 0, 0.1)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+            )}
 
-        <View style={styles.meta}>
-          <View>
-            <Text style={styles.cardTitle} numberOfLines={2}>
-              {item.manual.title}
-            </Text>
+            {/* Trophy badge prominente */}
+            <View style={styles.trophyBadge}>
+              <LinearGradient
+                colors={['#FFD700', '#FFA500', '#FF8C00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.trophyGradient}
+              >
+                <Ionicons name="trophy" size={24} color="#fff" />
+              </LinearGradient>
+            </View>
+
+            {/* Title overlay sulla cover */}
+            <View style={styles.coverTitleOverlay}>
+              <Text style={styles.coverTitle} numberOfLines={2}>
+                {item.manual.title}
+              </Text>
+            </View>
+
+            {!cover && (
+              <View style={styles.coverIcon}>
+                <Ionicons name="trophy" size={40} color="rgba(255, 215, 0, 0.8)" />
+              </View>
+            )}
+          </View>
+
+          {/* Achievement info section */}
+          <View style={styles.achievementInfo}>
+            <View style={styles.achievementHeader}>
+              <View style={styles.completedBadge}>
+                <Ionicons name="checkmark-circle" size={18} color="#4FFFA4" />
+                <Text style={styles.completedText}>Completed</Text>
+              </View>
+              <View style={styles.whenBadge}>
+                <Ionicons name="time-outline" size={14} color="rgba(232,238,247,0.85)" />
+                <Text style={styles.when}>{formatWhen(item.acked_at)}</Text>
+              </View>
+            </View>
 
             {item.manual.description ? (
               <Text style={styles.desc} numberOfLines={2}>
                 {item.manual.description}
               </Text>
             ) : null}
-          </View>
 
-          <View style={styles.footerColumn}>
-            <View style={styles.whenRow}>
-              <Ionicons name="time-outline" size={12} color="rgba(232,238,247,0.65)" />
-              <Text style={styles.when}>{formatWhen(item.acked_at)}</Text>
-            </View>
             <Pressable
               onPress={() =>
                 navigation.navigate('Home', {
@@ -431,8 +571,15 @@ function AnimatedAchievementCard({ item, index, navigation }: {
               style={styles.reviewBtn}
               accessibilityLabel="Review manual"
             >
-              <Ionicons name="open-outline" size={16} color={colors.fg} />
-              <Text style={styles.reviewText}>Review</Text>
+              <LinearGradient
+                colors={['rgba(79, 255, 191, 0.2)', 'rgba(108, 159, 154, 0.2)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.reviewBtnGradient}
+              >
+                <Ionicons name="open-outline" size={16} color={colors.fg} />
+                <Text style={styles.reviewText}>Review</Text>
+              </LinearGradient>
             </Pressable>
           </View>
         </View>
