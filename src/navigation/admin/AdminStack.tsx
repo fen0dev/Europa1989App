@@ -12,12 +12,16 @@ import { BlurView } from 'expo-blur';
 import { colors } from '../../theme/tokens';
 import { useAdmin } from '../../hooks/useAdmin';
 import { useNavigation } from '@react-navigation/native';
+import AdminSectionListScreen from '../../screens/admin/AdminSectionListScreen';
+import AdminArticleListScreen from '../../screens/admin/AdminArticleListScreen';
 
 export type AdminStackParamList = {
   AdminDashboard: undefined;
   AdminManualList: undefined;
   AdminManualEdit: { manualId?: string };
+  AdminSectionList: { manualId: string };
   AdminSectionEdit: { sectionId?: string; manualId: string };
+  AdminArticleList: { sectionId: string; manualId: string };
   AdminArticleEdit: { articleId?: string; sectionId: string };
   AdminQuestions: { manualId: string };
   AdminNotesModeration: { manualId: string };
@@ -85,9 +89,19 @@ export default function AdminStack() {
           options={{ title: 'Edit Manual' }}
         />
         <Stack.Screen
+          name="AdminSectionList"
+          component={AdminSectionListScreen}
+          options={{ title: 'Sections' }}
+        />
+        <Stack.Screen
           name="AdminSectionEdit"
           component={AdminSectionEditScreen}
           options={{ title: 'Edit Section' }}
+        />
+        <Stack.Screen
+          name="AdminArticleList"
+          component={AdminArticleListScreen}
+          options={{ title: 'Articles' }}
         />
         <Stack.Screen
           name="AdminArticleEdit"

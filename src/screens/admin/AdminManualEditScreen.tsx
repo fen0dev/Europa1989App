@@ -301,6 +301,22 @@ export default function AdminManualEditScreen({ route, navigation }: Props) {
       {manualId && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Management Actions</Text>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('AdminSectionList', { manualId: manualId! })}
+          >
+            <View style={styles.actionButtonIcon}>
+              <Ionicons name="folder-outline" size={24} color="#4FFFBF" />
+            </View>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonTitle}>Sections</Text>
+              <Text style={styles.actionButtonSubtitle}>
+                Create and manage sections for this manual
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.actionButton}

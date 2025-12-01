@@ -139,8 +139,23 @@ export async function createManualNote(input: CreateNoteInput): Promise<ManualNo
         throw handleApiError(error);
     }
 
-    // charge with stats from view
-    return getNoteById(data.id);
+    try {
+        return getNoteById(data.id);
+    } catch (viewError: any) {
+        console.warn('[createManualNote] View error, returning basic note:', viewError);
+        return {
+            ...data,
+            display_name: null,
+            avatar_url: null,
+            nickname: null,
+            helpful_content: 0,
+            like_count: 0,
+            total_reactions: 0,
+            current_user_reacted_helpful: false,
+            current_user_reacted: false,
+            is_reported: false,
+        } as ManualNote;
+    }
 }
 
 /**
